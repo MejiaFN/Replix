@@ -14,7 +14,15 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 let settings, recorder, mainWin, audioWin, toastWin, tray;
 let quitting = false;
-const log = (...a) => console.log('[replix]', ...a);
+let micMuted = false;
+const launchedHidden = process.argv.includes('--hidden');
+// Diagnostics go to %APPDATA%\Replix\replix.log (recreated each launch).
+let logFile;
+const log = (...a) => {
+  const line = `[${new Date().toISOString().slice(11, 23)}] ${a.join(' ')}
+`;
+  try { logFile = logFile || path.join(app.getPath('userData'), 'replix.log'); fs.appendFileSync(logFile, line); } catch {}
+};
 
 function display() {
   return screen.getAllDisplays()[settings.monitor] || screen.getPrimaryDisplay();
@@ -33,11 +41,15 @@ function pushStatus() {
 function createMain() {
   mainWin = new BrowserWindow({
     width: 1280, height: 800, minWidth: 960, minHeight: 600,
-    frame: false, backgroundColor: '#07070d', icon: ICON, show: !settings.startMinimized,
+    frame: false, backgroundColor: '#07070d', icon: ICON, show: !settings.startMinimized && !launchedHidden,
     webPreferences: { preload: path.join(__dirname, 'ui', 'preload.js') },
   });
   mainWin.loadFile(path.join(__dirname, 'ui', 'index.html'));
-  mainWin.on('close', (e) => { if (!quitting) { e.preventDefault(); mainWin.hide(); } });
+  mainWin.on('close', (e) => {
+    if (quitting) return;
+    e.preventDefault();
+    if (settings.closeToTray === false) { quitting = true; app.quit(); } else mainWin.hide();
+  });
 }
 
 function createAudio() {
@@ -49,6 +61,7 @@ function createAudio() {
 }
 
 function toast(title, body, kind = 'ok') {
+  if (settings.showNotifications === false && kind !== 'err') return;
   const d = screen.getPrimaryDisplay().workArea;
   if (!toastWin || toastWin.isDestroyed()) {
     toastWin = new BrowserWindow({
@@ -62,7 +75,7 @@ function toast(title, body, kind = 'ok') {
     toastWin.webContents.once('did-finish-load', () => toast(title, body, kind));
     return;
   }
-  toastWin.webContents.send('toast', { title, body, kind });
+  toastWin.webContents.send('toast', { title, body, kind, sound: settings.clipSound !== false });
   toastWin.showInactive();
   clearTimeout(toast.t);
   toast.t = setTimeout(() => toastWin && !toastWin.isDestroyed() && toastWin.hide(), 2800);
@@ -76,7 +89,7 @@ function updateTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open Replix', click: () => { mainWin.show(); mainWin.focus(); } },
     { type: 'separator' },
-    { label: `Save clip (${settings.clipHotkey})`, enabled: st.buffering, click: saveClip },
+    { label: `Save clip (${settings.clipHotkey || 'no hotkey'})`, enabled: st.buffering, click: () => saveClip() },
     { label: st.recording ? `Stop recording (${settings.recordHotkey})` : `Start recording (${settings.recordHotkey})`, click: toggleRecord },
     { label: st.buffering ? 'Turn replay buffer off' : 'Turn replay buffer on', click: toggleBuffer },
     { type: 'separator' },
@@ -86,8 +99,9 @@ function updateTray() {
 
 // ---------- capture actions ----------
 function audioConfig() {
-  const { systemAudio, systemVolume, mic, micDeviceId, micVolume } = settings;
-  return { systemAudio, systemVolume, mic, micDeviceId, micVolume };
+  const { systemAudio, systemVolume, mic, micDeviceId, micVolume, micNoiseSuppression, micEchoCancellation } = settings;
+  return { systemAudio, systemVolume, mic, micDeviceId, micVolume, micNoiseSuppression, micEchoCancellation,
+    inputs: recorder.audioInputs(settings) };
 }
 
 async function startCapture() {
@@ -107,11 +121,11 @@ async function toggleBuffer() {
 }
 
 let saving = false;
-async function saveClip() {
+async function saveClip(seconds) {
   if (saving) return;
   saving = true;
   try {
-    const out = await recorder.saveClip();
+    const out = await recorder.saveClip(seconds);
     toast('Clip saved', path.basename(out));
     send('clips:changed');
   } catch (e) {
@@ -136,12 +150,31 @@ async function toggleRecord() {
   pushStatus();
 }
 
+function toggleMicMute() {
+  micMuted = !micMuted;
+  audioWin.webContents.send('audio:micMute', micMuted);
+  toast(micMuted ? 'Mic muted' : 'Mic unmuted', micMuted ? 'Your voice is not being recorded' : 'Your voice is being recorded', micMuted ? 'err' : 'ok');
+  send('micMuted', micMuted);
+}
+
 function registerHotkeys() {
   globalShortcut.unregisterAll();
   const failed = [];
-  if (settings.clipHotkey && !globalShortcut.register(settings.clipHotkey, saveClip)) failed.push(settings.clipHotkey);
-  if (settings.recordHotkey && !globalShortcut.register(settings.recordHotkey, toggleRecord)) failed.push(settings.recordHotkey);
+  const bind = (key, fn) => {
+    if (!key) return;
+    try { if (!globalShortcut.register(key, fn)) failed.push(key); } catch { failed.push(key); }
+  };
+  bind(settings.clipHotkey, () => saveClip());
+  bind(settings.shortClipHotkey, () => saveClip(settings.shortClipSeconds));
+  bind(settings.recordHotkey, toggleRecord);
+  bind(settings.bufferHotkey, toggleBuffer);
+  bind(settings.micMuteHotkey, toggleMicMute);
   return failed;
+}
+
+function applyStartup() {
+  if (!app.isPackaged) return;
+  app.setLoginItemSettings({ openAtLogin: !!settings.launchAtStartup, args: ['--hidden'] });
 }
 
 // ---------- clips ----------
@@ -166,14 +199,14 @@ function inOutputDir(p) {
 
 // ---------- IPC ----------
 function setupIpc() {
-  ipcMain.on('audio:pcm', (_e, buf) => recorder.writeAudio(Buffer.from(buf)));
+  ipcMain.on('audio:pcm', (_e, key, buf) => recorder.writeAudio(key, Buffer.from(buf)));
   ipcMain.on('audio:log', (_e, m) => log('audio:', m));
   ipcMain.on('audio:ready', () => {
     if (settings.startBufferOnLaunch) startCapture().catch((e) => toast('Capture error', e.message, 'err')).then(pushStatus);
   });
 
   ipcMain.handle('state', () => ({
-    settings, status: recorder.status, version: app.getVersion(),
+    settings, status: recorder.status, version: app.getVersion(), micMuted,
     displays: screen.getAllDisplays().map((d, i) => ({ index: i, label: `Display ${i + 1} — ${Math.round(d.size.width * d.scaleFactor)}×${Math.round(d.size.height * d.scaleFactor)}${d.id === screen.getPrimaryDisplay().id ? ' (primary)' : ''}` })),
   }));
 
@@ -183,7 +216,10 @@ function setupIpc() {
     fs.mkdirSync(settings.outputDir, { recursive: true });
     settingsStore.save(settings);
     const failed = registerHotkeys();
-    const captureKeys = ['bufferSeconds', 'fps', 'resolution', 'quality', 'encoder', 'monitor', 'systemAudio', 'mic', 'micDeviceId', 'systemVolume', 'micVolume'];
+    applyStartup();
+    const captureKeys = ['bufferSeconds', 'fps', 'resolution', 'quality', 'encoder', 'codec', 'rateControl', 'bitrateMbps',
+      'encoderPreset', 'captureCursor', 'monitor', 'systemAudio', 'mic', 'micDeviceId', 'systemVolume', 'micVolume',
+      'splitAudio', 'audioBitrate', 'micNoiseSuppression', 'micEchoCancellation'];
     if (captureKeys.some((k) => prev[k] !== settings[k]) && recorder.wantRunning && !recorder.status.recording) {
       audioWin.webContents.send('audio:config', audioConfig());
       await recorder.restart(settings, display());
@@ -198,7 +234,8 @@ function setupIpc() {
   });
 
   ipcMain.handle('capture:buffer', toggleBuffer);
-  ipcMain.handle('capture:clip', saveClip);
+  ipcMain.handle('capture:clip', () => saveClip());
+  ipcMain.handle('capture:micMute', toggleMicMute);
   ipcMain.handle('capture:record', toggleRecord);
 
   ipcMain.handle('clips:list', listClips);
@@ -283,6 +320,7 @@ function checkForUpdates() {
 
 // ---------- boot ----------
 app.whenReady().then(() => {
+  try { fs.writeFileSync(path.join(app.getPath('userData'), 'replix.log'), ''); } catch {}
   settings = settingsStore.load();
   recorder = new Recorder(ffmpegPath, path.join(app.getPath('temp'), 'replix'));
   recorder.on('status', pushStatus);
@@ -304,6 +342,7 @@ app.whenReady().then(() => {
   tray.on('click', () => { mainWin.show(); mainWin.focus(); });
   updateTray();
 
+  applyStartup();
   const failed = registerHotkeys();
   if (failed.length) toast('Hotkey unavailable', `${failed.join(', ')} is used by another app. Change it in Settings.`, 'err');
 });

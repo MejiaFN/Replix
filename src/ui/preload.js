@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('replix', {
   toggleBuffer: invoke('capture:buffer'),
   saveClip: invoke('capture:clip'),
   toggleRecord: invoke('capture:record'),
+  toggleMicMute: invoke('capture:micMute'),
+  onMicMuted: (cb) => ipcRenderer.on('micMuted', (_e, m) => cb(m)),
   listClips: invoke('clips:list'),
   thumb: invoke('clips:thumb'),
   deleteClip: invoke('clips:delete'),

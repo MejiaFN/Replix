@@ -3,49 +3,63 @@
 <body>
 <script>
 // Hidden window: captures system audio (WASAPI loopback via Chromium) and the
-// mic, mixes them with WebAudio and streams raw PCM to the main process.
-let ctx, streams = [];
+// mic, and streams raw PCM to the main process: either one pre-mixed stream
+// ('mix') or game and mic separately ('sys' / 'mic') for split audio tracks.
+let ctx, streams = [], micGain = null, micVolume = 1, micMuted = false;
 
 async function stopAll() {
   streams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
   streams = [];
+  micGain = null;
   if (ctx) { await ctx.close().catch(() => {}); ctx = null; }
+}
+
+function makeWriter(key) {
+  const node = new AudioWorkletNode(ctx, 'pcm-writer', { channelCount: 2, channelCountMode: 'explicit' });
+  node.port.onmessage = (e) => window.replixAudio.pcm(key, e.data);
+  // A silent source keeps the stream flowing even when nothing is playing or a device fails.
+  const silence = ctx.createConstantSource(); silence.offset.value = 0; silence.connect(node); silence.start();
+  return node;
 }
 
 async function startAudio(cfg) {
   await stopAll();
-  if (!cfg.systemAudio && !cfg.mic) return;
+  if (!cfg.inputs.length) return;
   ctx = new AudioContext({ sampleRate: 48000 });
   await ctx.audioWorklet.addModule('pcm-worklet.js');
-  const node = new AudioWorkletNode(ctx, 'pcm-writer', { channelCount: 2, channelCountMode: 'explicit' });
-  node.port.onmessage = (e) => window.replixAudio.pcm(e.data);
-  // A silent source keeps the stream flowing even when nothing is playing.
-  const silence = ctx.createConstantSource(); silence.offset.value = 0; silence.connect(node); silence.start();
+  const writers = Object.fromEntries(cfg.inputs.map((k) => [k, makeWriter(k)]));
+  const target = (key) => writers[key] || writers.mix;
 
-  const add = (stream, vol) => {
+  const add = (stream, vol, key) => {
     streams.push(stream);
     const g = ctx.createGain(); g.gain.value = vol;
-    ctx.createMediaStreamSource(stream).connect(g).connect(node);
+    ctx.createMediaStreamSource(stream).connect(g).connect(target(key));
+    return g;
   };
   if (cfg.systemAudio) {
     try {
       const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       s.getVideoTracks().forEach((t) => { t.stop(); s.removeTrack(t); });
-      if (s.getAudioTracks().length) add(s, cfg.systemVolume); else window.replixAudio.log('No system audio track');
+      if (s.getAudioTracks().length) add(s, cfg.systemVolume, 'sys'); else window.replixAudio.log('No system audio track');
     } catch (e) { window.replixAudio.log('System audio failed: ' + e.message); }
   }
   if (cfg.mic) {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: {
         deviceId: cfg.micDeviceId && cfg.micDeviceId !== 'default' ? { exact: cfg.micDeviceId } : undefined,
-        echoCancellation: false, noiseSuppression: true, autoGainControl: false } });
-      add(s, cfg.micVolume);
+        echoCancellation: !!cfg.micEchoCancellation, noiseSuppression: cfg.micNoiseSuppression !== false, autoGainControl: false } });
+      micVolume = cfg.micVolume;
+      micGain = add(s, micMuted ? 0 : micVolume, 'mic');
     } catch (e) { window.replixAudio.log('Mic failed: ' + e.message); }
   }
 }
 
 window.replixAudio.onConfig((cfg) => startAudio(cfg).catch((e) => window.replixAudio.log(e.message)));
 window.replixAudio.onStop(() => stopAll());
+window.replixAudio.onMicMute((muted) => {
+  micMuted = muted;
+  if (micGain) micGain.gain.value = muted ? 0 : micVolume;
+});
 window.replixAudio.ready();
 </script>
 </body></html>

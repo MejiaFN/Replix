@@ -45,6 +45,15 @@ function renderStatus() {
     ? `Encoder: <b>${status.encoder.replace('h264_', '').toUpperCase()}</b><br>Capture: <b>${status.captureMode}</b>` : '';
 }
 $('#bufferBtn').addEventListener('click', () => api.toggleBuffer());
+let micMuted = false;
+function renderMic() {
+  const b = $('#micBtn');
+  b.hidden = !settings.mic;
+  b.textContent = micMuted ? '🔇 Mic muted' : '🎙 Mic on';
+  b.classList.toggle('muted', micMuted);
+}
+$('#micBtn').addEventListener('click', () => api.toggleMicMute());
+api.onMicMuted((m) => { micMuted = m; renderMic(); });
 $('#clipBtn').addEventListener('click', () => api.saveClip());
 $('#recBtn').addEventListener('click', () => api.toggleRecord());
 api.onStatus((s) => { status = s; renderStatus(); });
@@ -188,14 +197,37 @@ function fillSettings() {
   updateLabels();
   $('#clipKey').textContent = $('#emptyKey').textContent = settings.clipHotkey || '—';
   $('#recKey').textContent = settings.recordHotkey || '—';
+  renderMic();
 }
+// Rough MB per minute at 1080p60 for the size hint (scaled by resolution and FPS).
+const QUALITY_MBPS = { low: 6, medium: 10, high: 16, ultra: 28 };
+const RES_SCALE = { native: 1.2, 1440: 1.7, 1080: 1, 900: 0.72, 720: 0.5, 480: 0.25 };
+
 function updateLabels() {
   const v = form.elements;
   $('#bufVal').textContent = `${v.bufferSeconds.value}s`;
+  $('#shortVal').textContent = `${v.shortClipSeconds.value}s`;
+  $('#brVal').textContent = `${v.bitrateMbps.value} Mbps`;
   $('#sysVal').textContent = `${Math.round(v.systemVolume.value * 100)}%`;
   $('#micVal').textContent = `${Math.round(v.micVolume.value * 100)}%`;
+  const mode = v.rateControl.value;
+  $$('[data-show]').forEach((el) => (el.hidden = el.dataset.show !== mode));
+  let mbps = mode === 'bitrate' ? Number(v.bitrateMbps.value)
+    : QUALITY_MBPS[v.quality.value] * (RES_SCALE[v.resolution.value] || 1) * (Number(v.fps.value) / 60);
+  if (mode !== 'bitrate' && v.codec.value === 'hevc') mbps *= 0.65;
+  const perMin = (mbps * 60) / 8;
+  $('#sizeHint').textContent = `About ${Math.round(perMin)} MB per minute · a ${v.bufferSeconds.value}s clip ≈ ${Math.round(perMin * v.bufferSeconds.value / 60)} MB`
+    + (mode === 'bitrate' ? '' : ' (busy scenes use more)');
 }
 form.addEventListener('input', updateLabels);
+form.addEventListener('change', updateLabels);
+
+// Settings tabs
+$$('.settab').forEach((t) => t.addEventListener('click', () => {
+  $$('.settab').forEach((x) => x.classList.toggle('active', x === t));
+  $$('.settings .card').forEach((c) => (c.hidden = c.dataset.tab !== t.dataset.tab));
+}));
+$$('.settings .card').forEach((c) => (c.hidden = c.dataset.tab !== 'hotkeys'));
 
 async function loadMics() {
   try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach((t) => t.stop()); } catch {}
@@ -212,6 +244,7 @@ async function loadMics() {
 // Hotkey capture -> Electron accelerator string.
 const KEYMAP = { ' ': 'Space', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', '+': 'Plus' };
 $$('.hotkey').forEach((inp) => {
+  inp.placeholder = 'Off';
   inp.addEventListener('focus', () => { inp.classList.add('listening'); inp.dataset.prev = inp.value; inp.value = 'Press keys…'; });
   inp.addEventListener('blur', () => { inp.classList.remove('listening'); if (inp.value === 'Press keys…') inp.value = inp.dataset.prev; });
   inp.addEventListener('keydown', (e) => {
@@ -237,9 +270,12 @@ form.addEventListener('submit', async (e) => {
   for (const el of form.elements) {
     if (!el.name) continue;
     if (el.type === 'checkbox') next[el.name] = el.checked;
-    else if (el.type === 'range' || ['fps', 'monitor'].includes(el.name)) next[el.name] = Number(el.value);
+    else if ('num' in el.dataset) next[el.name] = Number(el.value);
     else next[el.name] = el.value;
   }
+  const keys = ['clipHotkey', 'shortClipHotkey', 'recordHotkey', 'bufferHotkey', 'micMuteHotkey'].map((k) => next[k]).filter(Boolean);
+  const dup = keys.find((k, i) => keys.indexOf(k) !== i);
+  if (dup) { $('#saveMsg').textContent = `⚠ ${dup} is used for two actions. Pick different keys.`; return; }
   const r = await api.saveSettings(next);
   settings = r.settings;
   fillSettings();
@@ -279,7 +315,7 @@ api.onUpdate((u) => { update = u; renderUpdate(); });
 // ---------- boot ----------
 (async () => {
   const st = await api.state();
-  settings = st.settings; status = st.status; appVersion = st.version;
+  settings = st.settings; status = st.status; appVersion = st.version; micMuted = !!st.micMuted;
   update = await api.updateState(); renderUpdate();
   $('#monitorSel').innerHTML = st.displays.map((d) => `<option value="${d.index}">${d.label}</option>`).join('');
   fillSettings();

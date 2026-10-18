@@ -123,3 +123,11 @@ input[type=checkbox] { accent-color: var(--cyan); width: 16px; height: 16px; }
 .update.available .update-text { color: var(--cyan); font-weight: 600; }
 .update-bar { height: 4px; background: #0a0a14; border-radius: 2px; overflow: hidden; }
 .update-bar div { height: 100%; width: 0; background: var(--cyan); box-shadow: var(--glow); transition: width .2s; }
+
+/* settings tabs */
+.settabs { display: flex; gap: 4px; margin-bottom: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; width: fit-content; }
+.settab { border: 0; background: none; padding: 8px 16px; border-radius: 7px; color: var(--dim); font-weight: 600; }
+.settab:hover { color: var(--text); }
+.settab.active { background: var(--panel2); color: var(--cyan); box-shadow: inset 0 -2px 0 var(--cyan); }
+.card .hint b { color: var(--text); font-weight: 600; }
+#micBtn.muted { border-color: var(--pink); color: var(--pink); }

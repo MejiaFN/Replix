@@ -2,12 +2,14 @@
 // full-session recording (tee'd off the same encode), clip export and trim.
 const { spawn, execFile } = require('child_process');
 const { EventEmitter } = require('events');
+const net = require('net');
 const fs = require('fs');
 const path = require('path');
 
 const SEG_SECONDS = 2;
-const QUALITY = { high: 19, medium: 23, low: 28 };
-const ENCODER_ORDER = ['h264_nvenc', 'h264_amf', 'h264_qsv', 'libx264'];
+const QUALITY = { ultra: 16, high: 19, medium: 23, low: 28 };
+const VENDOR_ORDER = ['nvenc', 'amf', 'qsv', 'cpu'];
+const TRACK_TITLES = { mix: 'Game + Mic', sys: 'Game', mic: 'Mic' };
 
 const fwd = (p) => p.replace(/\\/g, '/');
 const stamp = () => {
@@ -34,21 +36,34 @@ class Recorder extends EventEmitter {
     this.captureMode = 'ddagrab';
     this.recordingFile = null;
     this.recordingStarted = 0;
-    this.audioEnabled = false;
+    this.emit('log', 'recording stop');
+    this.audioKeys = []; // output tracks, e.g. ['mix'] or ['mix', 'sys', 'mic']
+    this.pipes = {}; // audio input key -> { name, server, socket }
     this.wantRunning = false;
   }
 
-  async detectEncoder(pref) {
-    if (pref && pref !== 'auto') return pref;
-    if (this._detected) return this._detected;
-    for (const enc of ENCODER_ORDER) {
-      try {
-        await run(this.ffmpeg, ['-f', 'lavfi', '-i', 'color=c=black:s=640x360:r=30', '-frames:v', '5', '-pix_fmt', 'yuv420p', '-c:v', enc, '-f', 'null', '-']);
-        this._detected = enc;
-        return enc;
-      } catch {}
+  // Returns an FFmpeg encoder name for the chosen vendor + codec, probing the GPU
+  // the first time so a missing NVENC/AMF/QSV falls back cleanly.
+  async detectEncoder(s) {
+    let vendor = s.encoder || 'auto';
+    const legacy = /^h264_(\w+)$/.exec(vendor); // settings saved by v1.0/1.1
+    if (legacy) vendor = legacy[1];
+    if (vendor === 'libx264') vendor = 'cpu';
+    const codec = s.codec === 'hevc' ? 'hevc' : 'h264';
+    const name = (v) => (v === 'cpu' ? (codec === 'hevc' ? 'libx265' : 'libx264') : `${codec}_${v}`);
+    const candidates = vendor === 'auto' ? VENDOR_ORDER : [vendor, 'cpu'];
+    this._probed = this._probed || {};
+    for (const v of candidates) {
+      const enc = name(v);
+      if (this._probed[enc] === undefined) {
+        try {
+          await run(this.ffmpeg, ['-f', 'lavfi', '-i', 'color=c=black:s=640x360:r=30', '-frames:v', '5', '-pix_fmt', 'yuv420p', '-c:v', enc, '-f', 'null', '-']);
+          this._probed[enc] = true;
+        } catch { this._probed[enc] = false; }
+      }
+      if (this._probed[enc]) return enc;
     }
-    return (this._detected = 'libx264');
+    return name('cpu');
   }
 
   get status() {
@@ -58,15 +73,16 @@ class Recorder extends EventEmitter {
       recordingStarted: this.recordingStarted,
       encoder: this.encoder,
       captureMode: this.captureMode,
+      audioTracks: this.audioKeys.map((k) => TRACK_TITLES[k]),
     };
   }
 
   videoInputArgs(s, display) {
     const scale = s.resolution === 'native' ? '' : `,scale=-2:${s.resolution}:flags=bicubic`;
     if (this.captureMode === 'ddagrab') {
-      return { input: ['-f', 'lavfi', '-i', `ddagrab=output_idx=${s.monitor}:framerate=${s.fps}:draw_mouse=1,hwdownload,format=bgra${scale},format=yuv420p`], vf: [] };
+      return { input: ['-f', 'lavfi', '-i', `ddagrab=output_idx=${s.monitor}:framerate=${s.fps}:draw_mouse=${s.captureCursor === false ? 0 : 1},hwdownload,format=bgra${scale},format=yuv420p`], vf: [] };
     }
-    const args = ['-f', 'gdigrab', '-framerate', String(s.fps), '-draw_mouse', '1'];
+    const args = ['-f', 'gdigrab', '-framerate', String(s.fps), '-draw_mouse', s.captureCursor === false ? '0' : '1'];
     if (display) {
       const b = display.bounds, f = display.scaleFactor || 1;
       args.push('-offset_x', String(Math.round(b.x * f)), '-offset_y', String(Math.round(b.y * f)),
@@ -77,21 +93,71 @@ class Recorder extends EventEmitter {
   }
 
   encoderArgs(s) {
-    const q = QUALITY[s.quality] ?? 23;
-    const g = String(s.fps);
-    switch (this.encoder) {
-      case 'h264_nvenc': return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', String(q), '-b:v', '0', '-g', g, '-bf', '0'];
-      case 'h264_amf': return ['-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cqp', '-qp_i', String(q), '-qp_p', String(q), '-g', g];
-      case 'h264_qsv': return ['-c:v', 'h264_qsv', '-preset', 'faster', '-global_quality', String(q), '-g', g];
-      default: return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(q), '-g', g, '-pix_fmt', 'yuv420p'];
+    const enc = this.encoder;
+    const q = String(QUALITY[s.quality] ?? 23);
+    const sp = s.encoderPreset || 'balanced'; // speed | balanced | quality
+    const cbr = s.rateControl === 'bitrate';
+    const mbps = Number(s.bitrateMbps) || 20;
+    const rate = ['-b:v', `${mbps}M`, '-maxrate', `${mbps}M`, '-bufsize', `${mbps * 2}M`];
+    const vendor = enc.startsWith('lib') ? 'cpu' : enc.split('_')[1];
+    const args = ['-c:v', enc, '-g', String(s.fps)];
+    if (vendor === 'nvenc') {
+      args.push('-preset', { speed: 'p2', balanced: 'p4', quality: 'p6' }[sp], '-bf', '0',
+        ...(cbr ? ['-rc', 'cbr', ...rate] : ['-rc', 'vbr', '-cq', q, '-b:v', '0']));
+    } else if (vendor === 'amf') {
+      args.push('-quality', sp, ...(cbr ? ['-rc', 'cbr', ...rate] : ['-rc', 'cqp', '-qp_i', q, '-qp_p', q]));
+    } else if (vendor === 'qsv') {
+      args.push('-preset', { speed: 'veryfast', balanced: 'faster', quality: 'medium' }[sp], ...(cbr ? rate : ['-global_quality', q]));
+    } else {
+      args.push('-preset', { speed: 'superfast', balanced: 'veryfast', quality: 'fast' }[sp], '-pix_fmt', 'yuv420p', ...(cbr ? rate : ['-crf', q]));
     }
+    if (enc.startsWith('hevc') || enc === 'libx265') args.push('-tag:v', 'hvc1');
+    return args;
+  }
+
+  trackTitleArgs() {
+    return this.audioKeys.flatMap((k, i) => [`-metadata:s:a:${i}`, `title=${TRACK_TITLES[k]}`, `-metadata:s:a:${i}`, `handler_name=${TRACK_TITLES[k]}`]);
+  }
+
+  // Which PCM streams the audio window should send: one pre-mixed stream, or
+  // game and mic separately so they can be saved as their own tracks.
+  audioInputs(s) {
+    const src = [s.systemAudio && 'sys', s.mic && 'mic'].filter(Boolean);
+    if (s.splitAudio && src.length === 2) return src;
+    // Always at least one stream (silent if audio is off): closing it is how FFmpeg is stopped cleanly.
+    return ['mix'];
+  }
+
+  // Each audio stream reaches FFmpeg through its own Windows named pipe.
+  async _openPipes(keys) {
+    this._closePipes();
+    const id = Date.now().toString(36);
+    await Promise.all(keys.map((key) => new Promise((resolve, reject) => {
+      const entry = { name: `\\\\.\\pipe\\replix-${key}-${process.pid}-${id}`, socket: null };
+      entry.server = net.createServer((sock) => {
+        entry.socket = sock;
+        sock.on('error', () => {});
+        sock.on('close', () => { if (entry.socket === sock) entry.socket = null; });
+      });
+      entry.server.on('error', reject);
+      entry.server.listen(entry.name, resolve);
+      this.pipes[key] = entry;
+    })));
+  }
+
+  _closePipes() {
+    for (const p of Object.values(this.pipes)) {
+      try { if (p.socket) p.socket.destroy(); } catch {}
+      try { p.server.close(); } catch {}
+    }
+    this.pipes = {};
   }
 
   async start(settings, display) {
     this.settings = settings;
     this.display = display;
     this.wantRunning = true;
-    this.encoder = await this.detectEncoder(settings.encoder);
+    this.encoder = await this.detectEncoder(settings);
     this._clearBuffer();
     await this._spawn();
   }
@@ -108,7 +174,10 @@ class Recorder extends EventEmitter {
     const s = this.settings;
     fs.mkdirSync(this.bufDir, { recursive: true });
 
-    this.audioEnabled = s.systemAudio || s.mic;
+    const inputs = this.audioInputs(s);
+    await this._openPipes(inputs);
+    this.audioKeys = inputs.length === 2 ? ['mix', ...inputs] : inputs;
+    if (!s.systemAudio && !s.mic) this.audioKeys = []; // silent stream is still recorded, just untitled
     const wrap = Math.ceil(s.bufferSeconds / SEG_SECONDS) + 3;
     const segOpts = `segment_time=${SEG_SECONDS}:segment_wrap=${wrap}:reset_timestamps=1:segment_format=mpegts`;
     // Unique name per FFmpeg run so a restart never overwrites older buffered footage;
@@ -122,13 +191,21 @@ class Recorder extends EventEmitter {
 
     const video = this.videoInputArgs(s, this.display);
     const args = ['-hide_banner', '-loglevel', 'warning', '-y', ...video.input];
-    if (this.audioEnabled) {
+    for (const key of inputs) {
       args.push('-thread_queue_size', '4096', '-use_wallclock_as_timestamps', '1',
-        '-f', 's16le', '-ar', '48000', '-ac', '2', '-i', 'pipe:0');
+        '-f', 's16le', '-ar', '48000', '-ac', '2', '-i', this.pipes[key].name);
     }
     args.push('-map', '0:v', ...video.vf);
-    // -shortest: closing the audio pipe ends FFmpeg gracefully (stdin is taken, so 'q' won't work).
-    if (this.audioEnabled) args.push('-map', '1:a', '-af', 'aresample=async=1000', '-c:a', 'aac', '-b:a', '160k', '-shortest');
+    if (inputs.length === 1) {
+      args.push('-filter_complex', '[1:a]aresample=async=1000[a0]', '-map', '[a0]');
+    } else if (inputs.length === 2) {
+      // Track 1 = game + mic mixed (what normal players play), 2 = game only, 3 = mic only.
+      args.push('-filter_complex',
+        '[1:a]aresample=async=1000,asplit[g1][g2];[2:a]aresample=async=1000,asplit[m1][m2];[g1][m1]amix=inputs=2:normalize=0[mix]',
+        '-map', '[mix]', '-map', '[g2]', '-map', '[m2]');
+    }
+    // -shortest: when the audio pipes close, FFmpeg finishes the files and exits.
+    args.push('-c:a', 'aac', '-b:a', `${s.audioBitrate || 160}k`, ...this.trackTitleArgs(), '-shortest');
     args.push(...this.encoderArgs(s));
 
     if (this.recordingFile) {
@@ -138,11 +215,12 @@ class Recorder extends EventEmitter {
       args.push('-f', 'segment', ...segOpts.split(':').flatMap((kv) => { const [k, v] = kv.split('='); return [`-${k}`, v]; }), segPath);
     }
 
+    this.emit('log', `ffmpeg ${args.join(' ')}`);
     const startedAt = Date.now();
     const proc = spawn(this.ffmpeg, args, { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] });
     this.proc = proc;
     let errTail = '';
-    proc.stderr.on('data', (d) => { errTail = (errTail + d.toString()).slice(-2000); });
+    proc.stderr.on('data', (d) => { errTail = (errTail + d.toString()).slice(-2000); this.emit('log', d.toString().trim()); });
     proc.stdin.on('error', () => {});
     proc.on('exit', (code) => {
       if (this.proc !== proc) return;
@@ -165,8 +243,9 @@ class Recorder extends EventEmitter {
     this.emit('status');
   }
 
-  writeAudio(buf) {
-    if (this.proc && this.audioEnabled && this.proc.stdin.writable) this.proc.stdin.write(buf);
+  writeAudio(key, buf) {
+    const p = this.pipes[key];
+    if (this.proc && p && p.socket && p.socket.writable) p.socket.write(buf);
   }
 
   _kill() {
@@ -176,9 +255,10 @@ class Recorder extends EventEmitter {
     return new Promise((resolve) => {
       const t = setTimeout(() => { try { proc.kill(); } catch {} resolve(); }, 4000);
       proc.once('exit', () => { clearTimeout(t); resolve(); });
-      // Graceful stop so the matroska file is finalized: 'q' (no audio) or EOF on the audio pipe.
-      try { if (!this.audioEnabled) proc.stdin.write('q'); proc.stdin.end(); } catch {}
-    });
+      // Ending the audio pipes stops FFmpeg gracefully (see -shortest) so files are finalized.
+      for (const p of Object.values(this.pipes)) { try { if (p.socket) p.socket.end(); } catch {} }
+      try { proc.stdin.write('q'); proc.stdin.end(); } catch {}
+    }).then(() => this._closePipes());
   }
 
   async stop() {
@@ -191,7 +271,7 @@ class Recorder extends EventEmitter {
   async restart(settings, display) {
     this.settings = settings;
     this.display = display;
-    this.encoder = await this.detectEncoder(settings.encoder);
+    this.encoder = await this.detectEncoder(settings);
     this.captureMode = 'ddagrab';
     if (this.wantRunning) { await this._kill(); this._clearBuffer(); await this._spawn(); }
   }
@@ -215,8 +295,9 @@ class Recorder extends EventEmitter {
     const out = path.join(s.outputDir, `Replix_Clip_${id}.mp4`);
     fs.writeFileSync(list, pick.map((x) => `file '${fwd(x.p)}'`).join('\n'));
     try {
-      await run(this.ffmpeg, ['-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', joined]);
-      await run(this.ffmpeg, ['-sseof', `-${seconds}`, '-i', joined, '-c', 'copy', '-movflags', '+faststart', out]);
+      await run(this.ffmpeg, ['-f', 'concat', '-safe', '0', '-i', list, '-map', '0', '-c', 'copy', joined]);
+      await run(this.ffmpeg, ['-sseof', `-${seconds}`, '-i', joined, '-map', '0', '-c', 'copy',
+        ...this.trackTitleArgs(), '-movflags', '+faststart', out]);
     } finally {
       for (const f of [list, joined]) { try { fs.unlinkSync(f); } catch {} }
     }
@@ -228,6 +309,7 @@ class Recorder extends EventEmitter {
     if (!this.wantRunning) throw new Error('Start capture first');
     this.recordingFile = path.join(this.settings.outputDir, `Replix_Recording_${stamp()}.mkv`);
     this.recordingStarted = Date.now();
+    this.emit('log', 'recording start');
     await this._spawn();
   }
 
@@ -236,10 +318,11 @@ class Recorder extends EventEmitter {
     if (!mkv) return null;
     this.recordingFile = null;
     this.recordingStarted = 0;
+    this.emit('log', 'recording stop');
     if (this.wantRunning) await this._spawn(); else await this._kill();
     const mp4 = mkv.replace(/\.mkv$/, '.mp4');
     try {
-      await run(this.ffmpeg, ['-i', mkv, '-c', 'copy', '-movflags', '+faststart', mp4]);
+      await run(this.ffmpeg, ['-i', mkv, '-map', '0', '-c', 'copy', '-movflags', '+faststart', mp4]);
       fs.unlinkSync(mkv);
       return mp4;
     } catch (e) {
@@ -251,8 +334,9 @@ class Recorder extends EventEmitter {
   async trim(input, start, end) {
     const out = input.replace(/(\.\w+)$/, `_trim_${stamp()}.mp4`);
     // Re-encode so cuts land exactly on the chosen frames.
-    await run(this.ffmpeg, ['-ss', String(start), '-to', String(end), '-i', input,
-      ...this.encoderArgs(this.settings), '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', out]);
+    await run(this.ffmpeg, ['-ss', String(start), '-to', String(end), '-i', input, '-map', '0:v:0', '-map', '0:a?',
+      ...this.encoderArgs(this.settings), '-c:a', 'aac', '-b:a', `${this.settings.audioBitrate || 160}k`,
+      '-movflags', '+faststart', out]);
     return out;
   }
 

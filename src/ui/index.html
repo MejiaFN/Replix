@@ -38,6 +38,7 @@
         </div>
       </div>
       <div class="actions">
+        <button class="btn ghost" id="micBtn" title="Mute / unmute mic" hidden>🎙 Mic on</button>
         <button class="btn ghost" id="bufferBtn">Replay buffer</button>
         <button class="btn primary" id="clipBtn">⚡ Clip it <kbd id="clipKey">F8</kbd></button>
         <button class="btn rec" id="recBtn"><span class="recdot"></span><span id="recLabel">Record</span> <kbd id="recKey">F9</kbd></button>
@@ -96,45 +97,108 @@
 
     <!-- Settings -->
     <section class="view" id="view-settings" hidden>
+      <div class="settabs" id="setTabs">
+        <button type="button" class="settab active" data-tab="hotkeys">Hotkeys</button>
+        <button type="button" class="settab" data-tab="video">Video &amp; quality</button>
+        <button type="button" class="settab" data-tab="audio">Audio</button>
+        <button type="button" class="settab" data-tab="general">General</button>
+      </div>
       <form class="settings" id="settingsForm">
-        <div class="card">
-          <h3>Hotkeys</h3>
-          <label>Save clip<input class="hotkey" name="clipHotkey" readonly></label>
+        <!-- Hotkeys -->
+        <div class="card" data-tab="hotkeys">
+          <h3>Clipping</h3>
+          <label>Save clip (full length)<input class="hotkey" name="clipHotkey" readonly></label>
+          <label>Save short clip<input class="hotkey" name="shortClipHotkey" readonly></label>
+          <label>Short clip length <span class="val" id="shortVal"></span>
+            <input type="range" name="shortClipSeconds" min="5" max="60" step="5" data-num></label>
+        </div>
+        <div class="card" data-tab="hotkeys">
+          <h3>Recording &amp; controls</h3>
           <label>Start / stop recording<input class="hotkey" name="recordHotkey" readonly></label>
-          <p class="hint">Click a box, then press the key combo you want. Esc clears.</p>
+          <label>Turn replay buffer on / off<input class="hotkey" name="bufferHotkey" readonly></label>
+          <label>Mute / unmute mic<input class="hotkey" name="micMuteHotkey" readonly></label>
+          <p class="hint">Click a box and press the keys you want. Press Esc to turn that hotkey off.</p>
         </div>
-        <div class="card">
-          <h3>Replay buffer</h3>
-          <label>Clip length <span class="val" id="bufVal"></span>
-            <input type="range" name="bufferSeconds" min="15" max="300" step="15"></label>
-          <label class="check"><input type="checkbox" name="startBufferOnLaunch"> Turn on replay buffer when Replix starts</label>
-          <label class="check"><input type="checkbox" name="startMinimized"> Start hidden in the tray</label>
-        </div>
-        <div class="card">
-          <h3>Video</h3>
-          <label>Display<select name="monitor" id="monitorSel"></select></label>
+
+        <!-- Video & quality -->
+        <div class="card" data-tab="video">
+          <h3>Capture</h3>
+          <label>Display<select name="monitor" id="monitorSel" data-num></select></label>
           <label>Resolution<select name="resolution">
-            <option value="native">Native</option><option value="1440">1440p</option>
-            <option value="1080">1080p</option><option value="720">720p</option></select></label>
-          <label>Frame rate<select name="fps"><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option></select></label>
-          <label>Quality<select name="quality"><option value="low">Low (small files)</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+            <option value="native">Native</option><option value="1440">1440p</option><option value="1080">1080p</option>
+            <option value="900">900p</option><option value="720">720p</option><option value="480">480p</option></select></label>
+          <label>Frame rate<select name="fps" data-num>
+            <option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option><option value="144">144 FPS</option></select></label>
+          <label>Clip length (replay buffer) <span class="val" id="bufVal"></span>
+            <input type="range" name="bufferSeconds" min="15" max="300" step="15" data-num></label>
+          <label class="check"><input type="checkbox" name="captureCursor"> Show mouse cursor in clips</label>
+        </div>
+        <div class="card" data-tab="video">
+          <h3>Quality</h3>
+          <label>Quality mode<select name="rateControl" id="rateSel">
+            <option value="quality">Constant quality (recommended)</option><option value="bitrate">Fixed bitrate</option></select></label>
+          <label data-show="quality">Quality<select name="quality">
+            <option value="low">Low (small files)</option><option value="medium">Medium</option>
+            <option value="high">High</option><option value="ultra">Ultra (big files)</option></select></label>
+          <label data-show="bitrate">Bitrate <span class="val" id="brVal"></span>
+            <input type="range" name="bitrateMbps" min="2" max="100" step="1" data-num></label>
+          <label>Encoder speed<select name="encoderPreset">
+            <option value="speed">Fastest (least FPS impact)</option><option value="balanced">Balanced</option><option value="quality">Best looking</option></select></label>
+          <p class="hint" id="sizeHint"></p>
+        </div>
+        <div class="card" data-tab="video">
+          <h3>Encoder</h3>
+          <label>Video codec<select name="codec">
+            <option value="h264">H.264 (plays everywhere)</option><option value="hevc">H.265 / HEVC (smaller files)</option></select></label>
           <label>Encoder<select name="encoder">
-            <option value="auto">Auto (best available)</option><option value="h264_nvenc">NVIDIA NVENC</option>
-            <option value="h264_amf">AMD AMF</option><option value="h264_qsv">Intel Quick Sync</option><option value="libx264">CPU (x264)</option></select></label>
+            <option value="auto">Auto (best available)</option><option value="nvenc">NVIDIA NVENC</option>
+            <option value="amf">AMD AMF</option><option value="qsv">Intel Quick Sync</option><option value="cpu">CPU (x264 / x265)</option></select></label>
+          <p class="hint">Using your graphics card (NVENC / AMF / Quick Sync) keeps the hit to your game's FPS lowest.</p>
         </div>
-        <div class="card">
-          <h3>Audio</h3>
+
+        <!-- Audio -->
+        <div class="card" data-tab="audio">
+          <h3>Game / system audio</h3>
           <label class="check"><input type="checkbox" name="systemAudio"> Record game / system audio</label>
-          <label>System volume <span class="val" id="sysVal"></span><input type="range" name="systemVolume" min="0" max="2" step="0.05"></label>
-          <label class="check"><input type="checkbox" name="mic"> Record microphone</label>
-          <label>Microphone<select name="micDeviceId" id="micSel"></select></label>
-          <label>Mic volume <span class="val" id="micVal"></span><input type="range" name="micVolume" min="0" max="2" step="0.05"></label>
+          <label>Volume <span class="val" id="sysVal"></span><input type="range" name="systemVolume" min="0" max="2" step="0.05" data-num></label>
         </div>
-        <div class="card">
+        <div class="card" data-tab="audio">
+          <h3>Microphone</h3>
+          <label class="check"><input type="checkbox" name="mic"> Record microphone</label>
+          <label>Device<select name="micDeviceId" id="micSel"></select></label>
+          <label>Volume <span class="val" id="micVal"></span><input type="range" name="micVolume" min="0" max="2" step="0.05" data-num></label>
+          <label class="check"><input type="checkbox" name="micNoiseSuppression"> Noise suppression</label>
+          <label class="check"><input type="checkbox" name="micEchoCancellation"> Echo cancellation (if you use speakers)</label>
+        </div>
+        <div class="card" data-tab="audio">
+          <h3>Tracks</h3>
+          <label class="check"><input type="checkbox" name="splitAudio"> Split game and mic into separate tracks</label>
+          <p class="hint">When this is on, each clip has 3 audio tracks: <b>Game + Mic</b>, then <b>Game</b>, then <b>Mic</b>. Normal players play the first one,
+            and editors like Premiere, DaVinci Resolve and CapCut let you adjust or mute each track separately. Both game audio and mic need to be on.</p>
+          <label>Audio quality<select name="audioBitrate" data-num>
+            <option value="128">128 kbps</option><option value="160">160 kbps</option><option value="192">192 kbps</option>
+            <option value="256">256 kbps</option><option value="320">320 kbps</option></select></label>
+        </div>
+
+        <!-- General -->
+        <div class="card" data-tab="general">
+          <h3>Startup</h3>
+          <label class="check"><input type="checkbox" name="launchAtStartup"> Launch Replix when Windows starts</label>
+          <label class="check"><input type="checkbox" name="startBufferOnLaunch"> Turn on replay buffer when Replix opens</label>
+          <label class="check"><input type="checkbox" name="startMinimized"> Start hidden in the tray</label>
+          <label class="check"><input type="checkbox" name="closeToTray"> Closing the window keeps Replix running in the tray</label>
+        </div>
+        <div class="card" data-tab="general">
+          <h3>Notifications</h3>
+          <label class="check"><input type="checkbox" name="showNotifications"> Show a popup when a clip is saved</label>
+          <label class="check"><input type="checkbox" name="clipSound"> Play a sound when a clip is saved</label>
+        </div>
+        <div class="card" data-tab="general">
           <h3>Storage</h3>
           <label>Save clips to
             <div class="pathrow"><input name="outputDir" readonly><button type="button" class="btn ghost small" id="pickDir">Change…</button></div></label>
         </div>
+
         <div class="savebar"><span id="saveMsg"></span><button class="btn primary" type="submit">Save settings</button></div>
       </form>
     </section>
