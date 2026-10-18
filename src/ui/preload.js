@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('replix', {
   reveal: invoke('clips:reveal'),
   openFolder: invoke('clips:openFolder'),
   trim: invoke('clips:trim'),
+  getAlbums: invoke('albums:get'),
+  setAlbums: invoke('albums:set'),
   updateState: invoke('update:state'),
   checkUpdate: invoke('update:check'),
   downloadUpdate: invoke('update:download'),

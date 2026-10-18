@@ -192,6 +192,19 @@ function listClips() {
   }).sort((a, b) => b.mtime - a.mtime);
 }
 
+// Albums: { albums: [{ id, name, created, clips: [file names] }] } in userData.
+// Clips are referenced by file name so albums survive changing the save folder.
+const albumsFile = () => path.join(app.getPath('userData'), 'albums.json');
+function loadAlbums() {
+  try { return JSON.parse(fs.readFileSync(albumsFile(), 'utf8')); } catch { return { albums: [] }; }
+}
+function saveAlbums(a) { fs.writeFileSync(albumsFile(), JSON.stringify(a, null, 2)); }
+function renameInAlbums(from, to) {
+  const a = loadAlbums();
+  a.albums.forEach((al) => { al.clips = al.clips.map((c) => (c === from ? to : c)).filter(Boolean); });
+  saveAlbums(a);
+}
+
 function inOutputDir(p) {
   const rel = path.relative(settings.outputDir, p);
   return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
@@ -250,6 +263,7 @@ function setupIpc() {
     if (!inOutputDir(p)) return false;
     await shell.trashItem(p); // Recycle Bin, so it can be restored
     try { fs.unlinkSync(path.join(thumbDir(), path.basename(p) + '.jpg')); } catch {}
+    renameInAlbums(path.basename(p), null);
     return true;
   });
   ipcMain.handle('clips:rename', (_e, p, name) => {
@@ -260,8 +274,11 @@ function setupIpc() {
     if (fs.existsSync(dest)) throw new Error('A clip with that name already exists');
     fs.renameSync(p, dest);
     try { fs.unlinkSync(path.join(thumbDir(), path.basename(p) + '.jpg')); } catch {}
+    renameInAlbums(path.basename(p), path.basename(dest));
     return dest;
   });
+  ipcMain.handle('albums:get', () => loadAlbums());
+  ipcMain.handle('albums:set', (_e, a) => { saveAlbums(a); return a; });
   ipcMain.handle('clips:copyTo', async (_e, paths) => {
     const r = await dialog.showOpenDialog(mainWin, { title: 'Copy clips to…', properties: ['openDirectory', 'createDirectory'] });
     if (r.canceled) return 0;

@@ -5,8 +5,42 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="titlebar">
-  <div class="brand"><img src="icon.png" alt=""><span>REPLIX</span></div>
+<!-- Icon sprite (stroke icons) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-clips" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="m3 10 18 0M7 6l2 4M12 6l2 4M17 6l2 4"/></symbol>
+    <symbol id="i-albums" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+    <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4"/></symbol>
+    <symbol id="i-hdd" viewBox="0 0 24 24"><path d="M22 12H2M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/><path d="M6 16h.01M10 16h.01"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></symbol>
+  </defs>
+</svg>
+
+<header class="topbar">
+  <div class="logo"><img src="icon.png" alt=""><span>REPLIX</span></div>
+  <div class="chips">
+    <button class="chip" id="bufferChip" title="Turn the replay buffer on or off"><span class="dot" id="bufferDot"></span><span id="bufferLabel">Starting…</span></button>
+    <button class="chip" id="clipChip" title="Save a clip now"><kbd id="clipKey">F8</kbd><span id="clipChipLabel">Clip 60s</span></button>
+    <button class="chip" id="recChip" title="Start or stop recording"><kbd id="recKey">F9</kbd><span id="recLabel">Long recording</span></button>
+    <button class="chip" id="micChip" title="Mute or unmute mic" hidden><svg class="ic"><use href="#i-mic"/></svg><span id="micLabel">Mic on</span></button>
+  </div>
   <div class="drag"></div>
   <div class="winbtns">
     <button data-win="min" title="Minimize">&#xE921;</button>
@@ -16,202 +50,346 @@
 </header>
 
 <div class="shell">
-  <nav class="side">
-    <button class="nav active" data-view="library"><span class="ico">▦</span>Library</button>
-    <button class="nav" data-view="settings"><span class="ico">⚙</span>Settings</button>
+  <nav class="rail">
+    <button class="rbtn active" data-view="home" title="Home"><svg><use href="#i-home"/></svg></button>
+    <button class="rbtn" data-view="clips" title="Clips"><svg><use href="#i-clips"/></svg></button>
+    <button class="rbtn" data-view="albums" title="Albums"><svg><use href="#i-albums"/></svg></button>
     <div class="spacer"></div>
-    <div class="update" id="update">
-      <div class="update-text" id="updateText">Version <span id="appVersion"></span></div>
-      <div class="update-bar" id="updateBar" hidden><div id="updateFill"></div></div>
-      <button class="btn ghost small" id="updateBtn">Check for updates</button>
-    </div>
-    <div class="engine" id="engine"></div>
+    <div class="storage" id="railStorage" title="Space used by your clips"><svg class="ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15"/><circle cx="18" cy="18" r="15" id="ringFill"/></svg><span id="railStorageText">0 MB</span></div>
+    <button class="rbtn" data-view="settings" title="Settings"><svg><use href="#i-settings"/></svg><span class="rdot" id="updateDot" hidden></span></button>
   </nav>
 
-  <main>
-    <section class="capturebar">
-      <div class="state">
-        <span class="pulse" id="pulse"></span>
-        <div>
-          <div class="state-title" id="stateTitle">Starting…</div>
-          <div class="state-sub" id="stateSub"></div>
+  <main id="main">
+    <!-- HOME -->
+    <section class="view" id="view-home">
+      <div class="page narrow">
+        <div class="hero" id="hero">
+          <div class="hero-state">
+            <span class="bigdot" id="heroDot"></span>
+            <div>
+              <div class="hero-title" id="heroTitle">Starting…</div>
+              <div class="hero-sub" id="heroSub"></div>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <button class="btn ghost" id="heroBuffer">Turn off</button>
+            <button class="btn primary" id="heroClip"><svg class="ic"><use href="#i-scissors"/></svg>Clip it</button>
+          </div>
         </div>
-      </div>
-      <div class="actions">
-        <button class="btn ghost" id="micBtn" title="Mute / unmute mic" hidden>🎙 Mic on</button>
-        <button class="btn ghost" id="bufferBtn">Replay buffer</button>
-        <button class="btn primary" id="clipBtn">⚡ Clip it <kbd id="clipKey">F8</kbd></button>
-        <button class="btn rec" id="recBtn"><span class="recdot"></span><span id="recLabel">Record</span> <kbd id="recKey">F9</kbd></button>
+
+        <div class="stats">
+          <div class="stat"><svg><use href="#i-scissors"/></svg><div><b id="statClips">0</b><span>Clips</span></div></div>
+          <div class="stat"><svg><use href="#i-film"/></svg><div><b id="statRecs">0</b><span>Recordings</span></div></div>
+          <div class="stat"><svg><use href="#i-sparkle"/></svg><div><b id="statToday">0</b><span>Saved today</span></div></div>
+          <div class="stat"><svg><use href="#i-hdd"/></svg><div><b id="statSize">0 MB</b><span>On this PC</span></div></div>
+        </div>
+
+        <div class="sechead"><h2>Recent clips</h2><button class="link" data-goto="clips">View all →</button></div>
+        <div class="grid" id="homeGrid"></div>
+        <div class="empty" id="homeEmpty" hidden>
+          <svg><use href="#i-scissors"/></svg>
+          <div class="big">No clips yet</div>
+          <div>Play something, then press <kbd id="emptyKey">F8</kbd> to save the last moments.</div>
+        </div>
       </div>
     </section>
 
-    <!-- Library -->
-    <section class="view" id="view-library">
-      <div class="libhead">
-        <div class="tabs">
-          <button class="tab active" data-filter="all">All</button>
-          <button class="tab" data-filter="clip">Clips</button>
-          <button class="tab" data-filter="recording">Recordings</button>
+    <!-- CLIPS (also used for an album's contents) -->
+    <section class="view" id="view-clips" hidden>
+      <div class="toolbar">
+        <button class="tbtn" id="albumBack" hidden><svg class="ic"><use href="#i-back"/></svg></button>
+        <h2 class="tbtitle" id="clipsTitle">Clips</h2>
+        <div class="seg" id="filterSeg">
+          <button class="active" data-filter="all">All</button>
+          <button data-filter="clip">Clips</button>
+          <button data-filter="recording">Recordings</button>
+          <button data-filter="trim">Trimmed</button>
         </div>
-        <input id="search" class="search" placeholder="Search clips…">
-        <button class="btn ghost small" id="openFolder">Open folder</button>
-      </div>
-      <div class="selbar" id="selbar" hidden>
-        <button class="selx" id="selClear" title="Clear selection (Esc)">✕</button>
-        <span class="selcount" id="selCount">0 selected</span>
-        <button class="btn ghost small" id="selAll">Select all</button>
         <div class="spacer"></div>
-        <button class="btn ghost small" id="selReveal">Show in folder</button>
-        <button class="btn ghost small" id="selCopy">Copy to…</button>
-        <button class="btn danger small" id="selDelete">🗑 Delete</button>
+        <span class="count" id="itemCount">0 items</span>
+        <select class="sort" id="sortSel" title="Sort">
+          <option value="new">Newest</option><option value="old">Oldest</option>
+          <option value="big">Largest</option><option value="name">Name</option>
+        </select>
+        <label class="searchbox"><svg class="ic"><use href="#i-search"/></svg><input id="search" placeholder="Search"></label>
+        <button class="tbtn" id="openFolder" title="Open folder"><svg class="ic"><use href="#i-folder"/></svg></button>
       </div>
-      <div class="grid" id="grid"></div>
-      <div class="empty" id="empty" hidden>
-        <div class="big">No clips yet</div>
-        <div>Play something, then press <kbd id="emptyKey">F8</kbd> to save the last moments.</div>
-      </div>
-    </section>
-
-    <!-- Player -->
-    <section class="view" id="view-player" hidden>
-      <div class="playerhead">
-        <button class="btn ghost small" id="backBtn">← Library</button>
-        <div class="ptitle" id="ptitle"></div>
-        <div class="pactions">
-          <button class="btn ghost small" id="renameBtn">Rename</button>
-          <button class="btn ghost small" id="revealBtn">Show in folder</button>
-          <button class="btn danger small" id="deleteBtn">Delete</button>
-        </div>
-      </div>
-      <div class="videowrap"><video id="video" controls></video></div>
-      <div class="trim">
-        <div class="trimbar" id="trimbar">
-          <div class="trimsel" id="trimsel"></div>
-          <div class="handle" id="hStart"></div>
-          <div class="handle" id="hEnd"></div>
-          <div class="playhead" id="playhead"></div>
-        </div>
-        <div class="trimrow">
-          <span class="tlabel">Start <b id="tStart">0:00.0</b></span>
-          <button class="btn ghost small" id="setStart">Set start here</button>
-          <button class="btn ghost small" id="setEnd">Set end here</button>
-          <span class="tlabel">End <b id="tEnd">0:00.0</b></span>
-          <span class="tlabel">Length <b id="tLen">0:00</b></span>
+      <div class="page wide">
+        <div class="selbar" id="selbar" hidden>
+          <button class="selx" id="selClear" title="Clear selection (Esc)">✕</button>
+          <span class="selcount" id="selCount">0 selected</span>
+          <button class="btn ghost small" id="selAll">Select all</button>
           <div class="spacer"></div>
-          <button class="btn ghost small" id="previewTrim">▶ Preview</button>
-          <button class="btn primary small" id="saveTrim">Save trimmed copy</button>
+          <div class="menuwrap">
+            <button class="btn ghost small" id="selAlbum"><svg class="ic"><use href="#i-albums"/></svg>Add to album</button>
+            <div class="menu" id="albumMenu" hidden></div>
+          </div>
+          <button class="btn ghost small" id="selRemove" hidden>Remove from album</button>
+          <button class="btn ghost small" id="selReveal"><svg class="ic"><use href="#i-folder"/></svg>Show in folder</button>
+          <button class="btn ghost small" id="selCopy"><svg class="ic"><use href="#i-copy"/></svg>Copy to…</button>
+          <button class="btn danger small" id="selDelete"><svg class="ic"><use href="#i-trash"/></svg>Delete</button>
+        </div>
+        <div class="grid" id="grid"></div>
+        <div class="empty" id="clipsEmpty" hidden>
+          <svg><use href="#i-clips"/></svg>
+          <div class="big" id="clipsEmptyTitle">Nothing here yet</div>
+          <div id="clipsEmptyText">Clips you save show up here.</div>
         </div>
       </div>
     </section>
 
-    <!-- Settings -->
-    <section class="view" id="view-settings" hidden>
-      <div class="settabs" id="setTabs">
-        <button type="button" class="settab active" data-tab="hotkeys">Hotkeys</button>
-        <button type="button" class="settab" data-tab="video">Video &amp; quality</button>
-        <button type="button" class="settab" data-tab="audio">Audio</button>
-        <button type="button" class="settab" data-tab="general">General</button>
+    <!-- ALBUMS -->
+    <section class="view" id="view-albums" hidden>
+      <div class="page narrow">
+        <h1 class="ptitle">Albums</h1>
+        <div class="quick">
+          <button class="qtile" data-quick="clip"><svg><use href="#i-scissors"/></svg>Clips</button>
+          <button class="qtile" data-quick="recording"><svg><use href="#i-film"/></svg>Recordings</button>
+          <button class="qtile" data-quick="trim"><svg><use href="#i-sparkle"/></svg>Trimmed</button>
+          <button class="qtile" data-quick="today"><svg><use href="#i-play"/></svg>Today</button>
+        </div>
+        <div class="sechead line"><h2>My albums</h2><button class="btn ghost small" id="newAlbum"><svg class="ic"><use href="#i-plus"/></svg>Create album</button></div>
+        <div class="agrid" id="albumGrid"></div>
+        <div class="empty" id="albumsEmpty" hidden>
+          <svg><use href="#i-albums"/></svg>
+          <div class="big">Your albums here</div>
+          <div>Group clips into albums, like a game, a session or your best plays.<br>Select clips in the library and pick <b>Add to album</b>.</div>
+          <button class="btn ghost" id="newAlbum2"><svg class="ic"><use href="#i-plus"/></svg>Create album</button>
+        </div>
       </div>
-      <form class="settings" id="settingsForm">
-        <!-- Hotkeys -->
-        <div class="card" data-tab="hotkeys">
-          <h3>Clipping</h3>
-          <label>Save clip (full length)<input class="hotkey" name="clipHotkey" readonly></label>
-          <label>Save short clip<input class="hotkey" name="shortClipHotkey" readonly></label>
-          <label>Short clip length <span class="val" id="shortVal"></span>
-            <input type="range" name="shortClipSeconds" min="5" max="60" step="5" data-num></label>
-        </div>
-        <div class="card" data-tab="hotkeys">
-          <h3>Recording &amp; controls</h3>
-          <label>Start / stop recording<input class="hotkey" name="recordHotkey" readonly></label>
-          <label>Turn replay buffer on / off<input class="hotkey" name="bufferHotkey" readonly></label>
-          <label>Mute / unmute mic<input class="hotkey" name="micMuteHotkey" readonly></label>
-          <p class="hint">Click a box and press the keys you want. Press Esc to turn that hotkey off.</p>
-        </div>
+    </section>
 
-        <!-- Video & quality -->
-        <div class="card" data-tab="video">
-          <h3>Capture</h3>
-          <label>Display<select name="monitor" id="monitorSel" data-num></select></label>
-          <label>Resolution<select name="resolution">
-            <option value="native">Native</option><option value="1440">1440p</option><option value="1080">1080p</option>
-            <option value="900">900p</option><option value="720">720p</option><option value="480">480p</option></select></label>
-          <label>Frame rate<select name="fps" data-num>
-            <option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option><option value="144">144 FPS</option></select></label>
-          <label>Clip length (replay buffer) <span class="val" id="bufVal"></span>
-            <input type="range" name="bufferSeconds" min="15" max="300" step="15" data-num></label>
-          <label class="check"><input type="checkbox" name="captureCursor"> Show mouse cursor in clips</label>
+    <!-- PLAYER -->
+    <section class="view" id="view-player" hidden>
+      <div class="playerwrap">
+        <div class="playerhead">
+          <button class="tbtn" id="backBtn"><svg class="ic"><use href="#i-back"/></svg></button>
+          <div class="pname" id="pname"></div>
+          <div class="pactions">
+            <button class="btn ghost small" id="renameBtn">Rename</button>
+            <button class="btn ghost small" id="revealBtn"><svg class="ic"><use href="#i-folder"/></svg>Show in folder</button>
+            <button class="btn danger small" id="deleteBtn"><svg class="ic"><use href="#i-trash"/></svg>Delete</button>
+          </div>
         </div>
-        <div class="card" data-tab="video">
-          <h3>Quality</h3>
-          <label>Quality mode<select name="rateControl" id="rateSel">
-            <option value="quality">Constant quality (recommended)</option><option value="bitrate">Fixed bitrate</option></select></label>
-          <label data-show="quality">Quality<select name="quality">
-            <option value="low">Low (small files)</option><option value="medium">Medium</option>
-            <option value="high">High</option><option value="ultra">Ultra (big files)</option></select></label>
-          <label data-show="bitrate">Bitrate <span class="val" id="brVal"></span>
-            <input type="range" name="bitrateMbps" min="2" max="100" step="1" data-num></label>
-          <label>Encoder speed<select name="encoderPreset">
-            <option value="speed">Fastest (least FPS impact)</option><option value="balanced">Balanced</option><option value="quality">Best looking</option></select></label>
-          <p class="hint" id="sizeHint"></p>
+        <div class="videowrap"><video id="video" controls></video></div>
+        <div class="trim">
+          <div class="trimbar" id="trimbar">
+            <div class="trimsel" id="trimsel"></div>
+            <div class="handle" id="hStart"></div>
+            <div class="handle" id="hEnd"></div>
+            <div class="playhead" id="playhead"></div>
+          </div>
+          <div class="trimrow">
+            <span class="tlabel">Start <b id="tStart">0:00.0</b></span>
+            <button class="btn ghost small" id="setStart">Set start here</button>
+            <button class="btn ghost small" id="setEnd">Set end here</button>
+            <span class="tlabel">End <b id="tEnd">0:00.0</b></span>
+            <span class="tlabel">Length <b id="tLen">0:00</b></span>
+            <div class="spacer"></div>
+            <button class="btn ghost small" id="previewTrim"><svg class="ic"><use href="#i-play"/></svg>Preview</button>
+            <button class="btn primary small" id="saveTrim"><svg class="ic"><use href="#i-scissors"/></svg>Save trimmed copy</button>
+          </div>
         </div>
-        <div class="card" data-tab="video">
-          <h3>Encoder</h3>
-          <label>Video codec<select name="codec">
-            <option value="h264">H.264 (plays everywhere)</option><option value="hevc">H.265 / HEVC (smaller files)</option></select></label>
-          <label>Encoder<select name="encoder">
-            <option value="auto">Auto (best available)</option><option value="nvenc">NVIDIA NVENC</option>
-            <option value="amf">AMD AMF</option><option value="qsv">Intel Quick Sync</option><option value="cpu">CPU (x264 / x265)</option></select></label>
-          <p class="hint">Using your graphics card (NVENC / AMF / Quick Sync) keeps the hit to your game's FPS lowest.</p>
-        </div>
+      </div>
+    </section>
 
-        <!-- Audio -->
-        <div class="card" data-tab="audio">
-          <h3>Game / system audio</h3>
-          <label class="check"><input type="checkbox" name="systemAudio"> Record game / system audio</label>
-          <label>Volume <span class="val" id="sysVal"></span><input type="range" name="systemVolume" min="0" max="2" step="0.05" data-num></label>
-        </div>
-        <div class="card" data-tab="audio">
-          <h3>Microphone</h3>
-          <label class="check"><input type="checkbox" name="mic"> Record microphone</label>
-          <label>Device<select name="micDeviceId" id="micSel"></select></label>
-          <label>Volume <span class="val" id="micVal"></span><input type="range" name="micVolume" min="0" max="2" step="0.05" data-num></label>
-          <label class="check"><input type="checkbox" name="micNoiseSuppression"> Noise suppression</label>
-          <label class="check"><input type="checkbox" name="micEchoCancellation"> Echo cancellation (if you use speakers)</label>
-        </div>
-        <div class="card" data-tab="audio">
-          <h3>Tracks</h3>
-          <label class="check"><input type="checkbox" name="splitAudio"> Split game and mic into separate tracks</label>
-          <p class="hint">When this is on, each clip has 3 audio tracks: <b>Game + Mic</b>, then <b>Game</b>, then <b>Mic</b>. Normal players play the first one,
-            and editors like Premiere, DaVinci Resolve and CapCut let you adjust or mute each track separately. Both game audio and mic need to be on.</p>
-          <label>Audio quality<select name="audioBitrate" data-num>
-            <option value="128">128 kbps</option><option value="160">160 kbps</option><option value="192">192 kbps</option>
-            <option value="256">256 kbps</option><option value="320">320 kbps</option></select></label>
-        </div>
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings" hidden>
+      <div class="settings-shell">
+        <aside class="subnav">
+          <label class="searchbox full"><svg class="ic"><use href="#i-search"/></svg><input id="setSearch" placeholder="Search settings"></label>
+          <div class="sublabel">Recording</div>
+          <button class="sbtn active" data-sec="hotkeys">Capture hotkeys</button>
+          <button class="sbtn" data-sec="recorder">Recorder</button>
+          <button class="sbtn" data-sec="quality">Quality</button>
+          <button class="sbtn" data-sec="audio">Audio</button>
+          <div class="sublabel">Storage</div>
+          <button class="sbtn" data-sec="storage">PC storage</button>
+          <div class="sublabel">App</div>
+          <button class="sbtn" data-sec="notifications">Notifications</button>
+          <button class="sbtn" data-sec="general">Windows &amp; startup</button>
+          <button class="sbtn" data-sec="about">About &amp; updates<span class="rdot inline" id="updateDot2" hidden></span></button>
+          <div class="spacer"></div>
+          <div class="ver" id="verText"></div>
+        </aside>
 
-        <!-- General -->
-        <div class="card" data-tab="general">
-          <h3>Startup</h3>
-          <label class="check"><input type="checkbox" name="launchAtStartup"> Launch Replix when Windows starts</label>
-          <label class="check"><input type="checkbox" name="startBufferOnLaunch"> Turn on replay buffer when Replix opens</label>
-          <label class="check"><input type="checkbox" name="startMinimized"> Start hidden in the tray</label>
-          <label class="check"><input type="checkbox" name="closeToTray"> Closing the window keeps Replix running in the tray</label>
-        </div>
-        <div class="card" data-tab="general">
-          <h3>Notifications</h3>
-          <label class="check"><input type="checkbox" name="showNotifications"> Show a popup when a clip is saved</label>
-          <label class="check"><input type="checkbox" name="clipSound"> Play a sound when a clip is saved</label>
-        </div>
-        <div class="card" data-tab="general">
-          <h3>Storage</h3>
-          <label>Save clips to
-            <div class="pathrow"><input name="outputDir" readonly><button type="button" class="btn ghost small" id="pickDir">Change…</button></div></label>
-        </div>
+        <form class="setpane" id="settingsForm">
+          <!-- Hotkeys -->
+          <section class="sec" data-sec="hotkeys">
+            <div class="sechero"><svg><use href="#i-scissors"/></svg><h1>Capture hotkeys</h1><p>Keys that save clips and control recording, even while you're in a game.</p></div>
+            <div class="card">
+              <h3>Hotkeys</h3>
+              <div class="row"><div class="rl"><div class="rt"><span class="tag cyan"></span>Clip</div><div class="rd">Save the last moments of gameplay (your full clip length)</div></div>
+                <div class="rc"><input class="hotkey" name="clipHotkey" readonly></div></div>
+              <div class="row"><div class="rl"><div class="rt"><span class="tag violet"></span>Short clip</div><div class="rd">Save a shorter clip, for quick moments</div></div>
+                <div class="rc"><input class="hotkey" name="shortClipHotkey" readonly>
+                  <select name="shortClipSeconds" data-num class="mini"><option value="5">5 sec</option><option value="10">10 sec</option><option value="15">15 sec</option><option value="20">20 sec</option><option value="30">30 sec</option><option value="45">45 sec</option></select></div></div>
+              <div class="row"><div class="rl"><div class="rt"><span class="tag green"></span>Start / stop long recording</div><div class="rd">Record a whole session from start to finish</div></div>
+                <div class="rc"><input class="hotkey" name="recordHotkey" readonly></div></div>
+              <div class="row"><div class="rl"><div class="rt"><span class="tag amber"></span>Replay buffer on / off</div><div class="rd">Pause or resume background capture</div></div>
+                <div class="rc"><input class="hotkey" name="bufferHotkey" readonly></div></div>
+              <div class="row"><div class="rl"><div class="rt"><span class="tag pink"></span>Mute / unmute mic</div><div class="rd">Stop your voice being recorded</div></div>
+                <div class="rc"><input class="hotkey" name="micMuteHotkey" readonly></div></div>
+              <p class="hint">Click a box and press the keys you want. Press Esc to turn that hotkey off.</p>
+            </div>
+          </section>
 
-        <div class="savebar"><span id="saveMsg"></span><button class="btn primary" type="submit">Save settings</button></div>
-      </form>
+          <!-- Recorder -->
+          <section class="sec" data-sec="recorder" hidden>
+            <div class="sechero"><svg><use href="#i-play"/></svg><h1>Recorder</h1><p>How Replix captures your screen in the background.</p></div>
+            <div class="card">
+              <h3>Replay buffer</h3>
+              <div class="row"><div class="rl"><div class="rt">Clip length</div><div class="rd">How far back a clip goes when you press the clip hotkey</div></div>
+                <div class="rc"><select name="bufferSeconds" data-num>
+                  <option value="15">15 seconds</option><option value="30">30 seconds</option><option value="45">45 seconds</option><option value="60">1 minute</option>
+                  <option value="90">1.5 minutes</option><option value="120">2 minutes</option><option value="180">3 minutes</option><option value="300">5 minutes</option></select></div></div>
+              <div class="row"><div class="rl"><div class="rt">Turn on when Replix opens</div><div class="rd">Start capturing right away so you never miss a moment</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="startBufferOnLaunch"><span></span></label></div></div>
+            </div>
+            <div class="card">
+              <h3>Capture</h3>
+              <div class="row"><div class="rl"><div class="rt">Display</div><div class="rd">The screen your games run on</div></div>
+                <div class="rc"><select name="monitor" id="monitorSel" data-num></select></div></div>
+              <div class="row"><div class="rl"><div class="rt">Show mouse cursor</div><div class="rd">Include the cursor in clips</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="captureCursor"><span></span></label></div></div>
+            </div>
+          </section>
+
+          <!-- Quality -->
+          <section class="sec" data-sec="quality" hidden>
+            <div class="sechero"><svg><use href="#i-sparkle"/></svg><h1>Quality</h1><p>Resolution, frame rate and how sharp your clips look. If your game stutters, try a lower setting.</p></div>
+            <div class="card">
+              <h3>Recording quality</h3>
+              <div class="presets" id="presets">
+                <button type="button" class="preset" data-preset="low"><b>Low</b><span>Small files, older PCs</span><em>720p · 30 FPS</em></button>
+                <button type="button" class="preset" data-preset="standard"><b>Standard</b><span>Great balance</span><em>1080p · 60 FPS</em></button>
+                <button type="button" class="preset" data-preset="high"><b>High</b><span>Sharpest clips</span><em>Native · 60 FPS</em></button>
+                <button type="button" class="preset" data-preset="custom"><b>Custom</b><span>Pick your own settings</span><em id="customDesc">—</em></button>
+              </div>
+              <div class="custom" id="customBox">
+                <div class="row"><div class="rl"><div class="rt">Resolution</div></div>
+                  <div class="rc"><select name="resolution">
+                    <option value="native">Native</option><option value="1440">1440p</option><option value="1080">1080p</option>
+                    <option value="900">900p</option><option value="720">720p</option><option value="480">480p</option></select></div></div>
+                <div class="row"><div class="rl"><div class="rt">Frame rate</div></div>
+                  <div class="rc"><select name="fps" data-num><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option><option value="144">144 FPS</option></select></div></div>
+                <div class="row"><div class="rl"><div class="rt">Quality mode</div><div class="rd">Constant quality keeps every scene sharp; fixed bitrate keeps file sizes predictable</div></div>
+                  <div class="rc"><select name="rateControl" id="rateSel"><option value="quality">Constant quality</option><option value="bitrate">Fixed bitrate</option></select></div></div>
+                <div class="row" data-show="quality"><div class="rl"><div class="rt">Quality</div></div>
+                  <div class="rc"><select name="quality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="ultra">Ultra</option></select></div></div>
+                <div class="row" data-show="bitrate"><div class="rl"><div class="rt">Bitrate <span class="val" id="brVal"></span></div></div>
+                  <div class="rc"><input type="range" name="bitrateMbps" min="2" max="100" step="1" data-num></div></div>
+              </div>
+              <p class="hint" id="sizeHint"></p>
+            </div>
+            <div class="card">
+              <h3>Encoder</h3>
+              <div class="row"><div class="rl"><div class="rt">Video encoder</div><div class="rd">Your graphics card keeps the FPS hit lowest</div></div>
+                <div class="rc"><select name="encoder"><option value="auto">Auto</option><option value="nvenc">NVIDIA (NVENC)</option><option value="amf">AMD (AMF)</option><option value="qsv">Intel (Quick Sync)</option><option value="cpu">CPU</option></select></div></div>
+              <div class="row"><div class="rl"><div class="rt">Codec</div><div class="rd">H.265 makes smaller files; H.264 plays everywhere</div></div>
+                <div class="rc"><select name="codec"><option value="h264">H.264</option><option value="hevc">H.265</option></select></div></div>
+              <div class="row"><div class="rl"><div class="rt">Encoder speed</div></div>
+                <div class="rc"><select name="encoderPreset"><option value="speed">Fastest</option><option value="balanced">Balanced</option><option value="quality">Best looking</option></select></div></div>
+            </div>
+          </section>
+
+          <!-- Audio -->
+          <section class="sec" data-sec="audio" hidden>
+            <div class="sechero"><svg><use href="#i-volume"/></svg><h1>Audio</h1><p>Game sound, your microphone, and how they're saved.</p></div>
+            <div class="card">
+              <h3>Game / system audio</h3>
+              <div class="row"><div class="rl"><div class="rt">Record game audio</div><div class="rd">Everything you hear on your PC</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="systemAudio"><span></span></label></div></div>
+              <div class="row"><div class="rl"><div class="rt">Volume <span class="val" id="sysVal"></span></div></div>
+                <div class="rc"><input type="range" name="systemVolume" min="0" max="2" step="0.05" data-num></div></div>
+            </div>
+            <div class="card">
+              <h3>Microphone</h3>
+              <div class="row"><div class="rl"><div class="rt">Record microphone</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="mic"><span></span></label></div></div>
+              <div class="row"><div class="rl"><div class="rt">Device</div></div>
+                <div class="rc"><select name="micDeviceId" id="micSel"></select></div></div>
+              <div class="row"><div class="rl"><div class="rt">Volume <span class="val" id="micVal"></span></div></div>
+                <div class="rc"><input type="range" name="micVolume" min="0" max="2" step="0.05" data-num></div></div>
+              <div class="row"><div class="rl"><div class="rt">Noise suppression</div><div class="rd">Cuts background noise like fans and keyboards</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="micNoiseSuppression"><span></span></label></div></div>
+              <div class="row"><div class="rl"><div class="rt">Echo cancellation</div><div class="rd">Turn on if you use speakers instead of headphones</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="micEchoCancellation"><span></span></label></div></div>
+            </div>
+            <div class="card">
+              <h3>Tracks</h3>
+              <div class="row"><div class="rl"><div class="rt">Separate audio tracks</div><div class="rd">Save <b>Game + Mic</b>, <b>Game</b> and <b>Mic</b> as their own tracks so you can adjust each one in an editor</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="splitAudio"><span></span></label></div></div>
+              <div class="row"><div class="rl"><div class="rt">Audio quality</div></div>
+                <div class="rc"><select name="audioBitrate" data-num><option value="128">128 kbps</option><option value="160">160 kbps</option><option value="192">192 kbps</option><option value="256">256 kbps</option><option value="320">320 kbps</option></select></div></div>
+            </div>
+          </section>
+
+          <!-- Storage -->
+          <section class="sec" data-sec="storage" hidden>
+            <div class="sechero"><svg><use href="#i-hdd"/></svg><h1>PC storage</h1><p>Where your clips are saved and how much space they use.</p></div>
+            <div class="card">
+              <h3>Clip folder</h3>
+              <div class="row"><div class="rl"><div class="rt">Save clips to</div><div class="rd" id="outDirText"></div></div>
+                <div class="rc"><input type="hidden" name="outputDir"><button type="button" class="btn ghost small" id="pickDir">Change…</button><button type="button" class="btn ghost small" id="openDir">Open</button></div></div>
+              <div class="row"><div class="rl"><div class="rt">Space used</div><div class="rd" id="storageText"></div></div><div class="rc"></div></div>
+            </div>
+          </section>
+
+          <!-- Notifications -->
+          <section class="sec" data-sec="notifications" hidden>
+            <div class="sechero"><svg><use href="#i-bell"/></svg><h1>Notifications</h1><p>How Replix lets you know a clip was saved.</p></div>
+            <div class="card">
+              <h3>Alerts</h3>
+              <div class="row"><div class="rl"><div class="rt">Popup</div><div class="rd">Show a small popup in the corner when a clip is saved</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="showNotifications"><span></span></label></div></div>
+              <div class="row"><div class="rl"><div class="rt">Sound</div><div class="rd">Play a short chime when a clip is saved</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="clipSound"><span></span></label></div></div>
+            </div>
+          </section>
+
+          <!-- General -->
+          <section class="sec" data-sec="general" hidden>
+            <div class="sechero"><svg><use href="#i-sliders"/></svg><h1>Windows &amp; startup</h1><p>How Replix behaves on your PC.</p></div>
+            <div class="card">
+              <h3>Startup</h3>
+              <div class="row"><div class="rl"><div class="rt">Launch with Windows</div><div class="rd">Replix starts hidden in the tray when you sign in</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="launchAtStartup"><span></span></label></div></div>
+              <div class="row"><div class="rl"><div class="rt">Start hidden</div><div class="rd">Open straight to the tray instead of showing this window</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="startMinimized"><span></span></label></div></div>
+              <div class="row"><div class="rl"><div class="rt">Keep running when closed</div><div class="rd">Closing the window keeps clipping in the background (quit from the tray icon)</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="closeToTray"><span></span></label></div></div>
+            </div>
+          </section>
+
+          <!-- About -->
+          <section class="sec" data-sec="about" hidden>
+            <div class="sechero"><svg><use href="#i-info"/></svg><h1>About &amp; updates</h1><p>Replix is a free clipping app for Windows.</p></div>
+            <div class="card">
+              <h3>Updates</h3>
+              <div class="row"><div class="rl"><div class="rt" id="updateTitle">Version</div><div class="rd" id="updateText"></div>
+                <div class="update-bar" id="updateBar" hidden><div id="updateFill"></div></div></div>
+                <div class="rc"><button type="button" class="btn ghost small" id="updateBtn">Check for updates</button></div></div>
+              <div class="row"><div class="rl"><div class="rt">Engine</div><div class="rd" id="engineText"></div></div><div class="rc"></div></div>
+            </div>
+          </section>
+
+          <div class="savebar" id="savebar" hidden><span id="saveMsg">You have unsaved changes</span>
+            <button type="button" class="btn ghost small" id="revertBtn">Undo</button>
+            <button class="btn primary small" type="submit">Save changes</button></div>
+        </form>
+      </div>
     </section>
   </main>
+</div>
+
+<!-- simple prompt dialog (album names) -->
+<div class="modal" id="modal" hidden>
+  <div class="mbox">
+    <h3 id="mTitle">Create album</h3>
+    <input id="mInput" maxlength="60" placeholder="Album name">
+    <div class="mrow"><button class="btn ghost small" id="mCancel">Cancel</button><button class="btn primary small" id="mOk">Create</button></div>
+  </div>
 </div>
 <script src="app.js"></script>
 </body></html>
