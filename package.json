@@ -6,7 +6,9 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win",
-    "release": "electron-builder --win --publish always"
+    "release": "electron-builder --win --publish always",
+    "prerelease": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "predist": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "author": "Replix",
   "license": "ISC",

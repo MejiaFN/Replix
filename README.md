@@ -27,7 +27,7 @@ npm.cmd install
 npm.cmd run dist
 ```
 
-The two exe files appear in the `dist` folder. Upload those (e.g. to a GitHub Release, itch.io or Google Drive).
+The two exe files appear in the `dist` folder. Each build clears out the previous version's files first, so `dist` only ever holds the newest version. Upload those (e.g. to a GitHub Release, itch.io or Google Drive).
 
 > If the build fails with "Cannot create symbolic link", turn on Windows **Developer Mode**
 > (Settings → System → For developers) and run it again.
