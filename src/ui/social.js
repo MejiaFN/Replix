@@ -25,8 +25,19 @@ function avatarHtml(p, cls = '') {
 }
 function gameIconHtml(g, cls = '') {
   if (!g) return '';
+  if (g.image_url) return `<span class="gicon img ${cls}" style="--gc:${esc(g.color)};background-image:url('${esc(g.image_url)}')"></span>`;
   return `<span class="gicon ${cls}" style="--gc:${esc(g.color)}">${esc(g.name.replace(/[^A-Za-z0-9]/g, '')[0] || '?')}</span>`;
 }
+const shareBase = (cfg.shareBase || '').replace(/\/$/, '');
+const clipLink = (id) => `${shareBase}/c/?id=${id}`;
+const profileLink = (username) => `${shareBase}/u/?name=${encodeURIComponent(username)}`;
+// Social handles -> profile URLs (handles only; never trust a pasted URL).
+const SOCIALS = {
+  twitch: ['Twitch', (h) => `https://twitch.tv/${h}`], youtube: ['YouTube', (h) => `https://youtube.com/@${h}`],
+  tiktok: ['TikTok', (h) => `https://tiktok.com/@${h}`], x: ['X', (h) => `https://x.com/${h}`],
+  instagram: ['Instagram', (h) => `https://instagram.com/${h}`], discord: ['Discord', null],
+};
+const cleanHandle = (h) => String(h || '').trim().replace(/^https?:\/\/\S+\//, '').replace(/^@/, '').replace(/[^\w.\-]/g, '').slice(0, 40);
 function openModal(id) { $('#' + id).hidden = false; }
 function closeModal(id) { $('#' + id).hidden = true; }
 $$('.modal [data-close]').forEach((b) => b.addEventListener('click', () => (b.closest('.modal').hidden = true)));
@@ -198,7 +209,10 @@ function openGamesModal() {
 function renderGamePick() {
   const q = $('#gameSearch').value.toLowerCase();
   $('#gamePick').innerHTML = gamesCatalog.filter((g) => g.name.toLowerCase().includes(q)).map((g) => `
-    <button class="gpick ${myGames.has(g.id) ? 'on' : ''}" data-follow-game="${esc(g.id)}">${gameIconHtml(g, 'lg')}<b>${esc(g.name)}</b><span>${myGames.has(g.id) ? '✓ Following' : 'Follow'}</span></button>`).join('');
+    <button class="gpick art ${myGames.has(g.id) ? 'on' : ''}" data-follow-game="${esc(g.id)}">
+      ${g.image_url ? `<span class="gart" style="background-image:url('${esc(g.image_url)}')"></span>`
+        : `<span class="gart noart" style="--gc:${esc(g.color)}">${esc(g.name.replace(/[^A-Za-z0-9]/g, '')[0] || '?')}</span>`}
+      <b>${esc(g.name)}</b><span>${myGames.has(g.id) ? '✓ Following' : 'Follow'}</span></button>`).join('');
   $$('#gamePick [data-follow-game]').forEach((b) => (b.onclick = () => toggleGameFollow(b.dataset.followGame)));
 }
 $('#gameSearch').addEventListener('input', renderGamePick);
@@ -224,6 +238,8 @@ async function openGame(id) {
   $('#gameIcon').outerHTML = gameIconHtml(g, 'big" id="gameIcon');
   $('#gameName').textContent = g.name;
   $('#gameHero').style.setProperty('--gc', g.color);
+  $('#gameHero').style.setProperty('--art', g.image_url ? `url('${g.image_url}')` : 'none');
+  $('#gameHero').classList.toggle('hasart', !!g.image_url);
   $('#gameMeta').textContent = '';
   renderGameFollowBtn();
   go('game');
@@ -306,7 +322,8 @@ function postCard(p) {
       ${g ? `<button class="gchip" data-game="${esc(g.id)}">${gameIconHtml(g, 'sm')}${esc(g.name)}</button>` : ''}
       <div class="menuwrap"><button class="tbtn more"><svg class="ic"><use href="#i-more"/></svg></button>
         <div class="menu" hidden>
-          <button data-a="link"><svg class="ic"><use href="#i-link"/></svg>Copy video link</button>
+          <button data-a="share"><svg class="ic"><use href="#i-share"/></svg>Copy share link</button>
+          <button data-a="link"><svg class="ic"><use href="#i-link"/></svg>Copy video file link</button>
           ${me && me.id === p.user_id ? '<button data-a="delete"><svg class="ic"><use href="#i-trash"/></svg>Delete post</button>' : '<button data-a="report"><svg class="ic"><use href="#i-flag"/></svg>Report</button>'}
         </div></div>
     </header>
@@ -334,7 +351,8 @@ function postCard(p) {
   $('.more', el).onclick = (e) => { e.stopPropagation(); $$('.post .menu').forEach((x) => x !== menu && (x.hidden = true)); menu.hidden = !menu.hidden; };
   $$('[data-a]', menu).forEach((b) => b.addEventListener('click', async () => {
     menu.hidden = true;
-    if (b.dataset.a === 'link') { await navigator.clipboard.writeText(publicUrl(p.video_path)); b.lastChild.textContent = 'Copied ✓'; }
+    if (b.dataset.a === 'link') { await navigator.clipboard.writeText(publicUrl(p.video_path)); flash('Video file link copied'); }
+    if (b.dataset.a === 'share') { await navigator.clipboard.writeText(clipLink(p.id)); flash('Share link copied: anyone can watch it in a browser'); }
     if (b.dataset.a === 'report') {
       if (needAccount()) return;
       const reason = await prompt2('Why are you reporting this clip?', 'Report');
@@ -401,7 +419,21 @@ async function loadComments(p, el) {
 }
 
 // ---------- profiles ----------
-let viewingProfile = null;
+let viewingProfile = null, viewingUsername = '';
+$('#profShareBtn').addEventListener('click', async () => {
+  await navigator.clipboard.writeText(profileLink(viewingUsername));
+  flash('Profile link copied');
+});
+
+// Small confirmation bubble at the bottom of the window.
+function flash(text) {
+  let el = $('#flash');
+  if (!el) { el = document.createElement('div'); el.id = 'flash'; document.body.appendChild(el); }
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(flash.t);
+  flash.t = setTimeout(() => el.classList.remove('show'), 2400);
+}
 async function openProfile(id) {
   if (!online) return;
   viewingProfile = id;
@@ -418,6 +450,24 @@ async function openProfile(id) {
   $('#profName').textContent = p.display_name || p.username;
   $('#profHandle').textContent = '@' + p.username;
   $('#profBio').textContent = p.bio || '';
+  viewingUsername = p.username;
+  const hero = $('.profhero');
+  hero.style.setProperty('--gc', p.accent_color || '#00e5ff');
+  hero.style.setProperty('--art', p.banner_url ? `url('${p.banner_url}')` : 'none');
+  hero.classList.toggle('hasart', !!p.banner_url);
+  $('#view-profile').style.setProperty('--accent', p.accent_color || '#00e5ff');
+  const links = p.links || {};
+  $('#profLinks').innerHTML = Object.keys(SOCIALS).filter((k) => links[k]).map((k) =>
+    `<button class="plink" data-k="${k}" title="${esc(SOCIALS[k][0])}"><b>${esc(SOCIALS[k][0])}</b>${esc(links[k])}</button>`).join('');
+  $$('#profLinks .plink').forEach((b) => (b.onclick = async () => {
+    const [, url] = SOCIALS[b.dataset.k], h = links[b.dataset.k];
+    if (url) api.openExternal(url(h)); else { await navigator.clipboard.writeText(h); flash('Discord username copied'); }
+  }));
+  const favs = (p.favorite_games || []).map(gameById).filter(Boolean);
+  $('#profFav').hidden = !favs.length;
+  $('#profFav').innerHTML = favs.length ? '<span class="pfl">Favorite games</span>' + favs.map((g) =>
+    `<button class="favcard" data-game="${esc(g.id)}" style="--gc:${esc(g.color)}${g.image_url ? `;background-image:url('${esc(g.image_url)}')` : ''}"><b>${esc(g.name)}</b></button>`).join('') : '';
+  $$('#profFav .favcard').forEach((b) => (b.onclick = () => openGame(b.dataset.game)));
   $('#profPosts').textContent = st ? st.posts : 0;
   $('#profFollowers').textContent = st ? st.followers : 0;
   $('#profFollowing').textContent = st ? st.following : 0;
@@ -474,10 +524,56 @@ $('#profEditBtn').addEventListener('click', () => {
   $('#editName').value = me.display_name || '';
   $('#editBio').value = me.bio || '';
   $('#editErr').textContent = '';
-  pendingAvatar = null;
+  pendingAvatar = null; pendingBanner = undefined;
+  editAccent = me.accent_color || '#00e5ff';
+  editFavs = [...(me.favorite_games || [])];
+  renderBannerPrev(me.banner_url);
+  renderSwatches();
+  renderFavPick();
+  $$('[data-link]').forEach((i) => (i.value = (me.links || {})[i.dataset.link] || ''));
   openModal('profileModal');
 });
-let pendingAvatar = null;
+let pendingAvatar = null, pendingBanner, editAccent = '#00e5ff', editFavs = [];
+const ACCENTS = ['#00e5ff', '#8b5cf6', '#ff3d71', '#22c55e', '#f59e0b', '#3b82f6', '#ef4444', '#ec4899', '#14b8a6', '#eab308'];
+function renderBannerPrev(url) {
+  const b = $('#editBanner');
+  b.style.backgroundImage = url ? `url('${url}')` : '';
+  b.style.setProperty('--gc', editAccent);
+  $('#bannerClear').hidden = !url;
+}
+function renderSwatches() {
+  const box = $('#swatches');
+  box.innerHTML = ACCENTS.map((c) => `<button type="button" class="sw ${c === editAccent ? 'on' : ''}" data-c="${c}" style="--c:${c}"></button>`).join('')
+    + `<label class="sw custom ${ACCENTS.includes(editAccent) ? '' : 'on'}" style="--c:${editAccent}" title="Custom color"><input type="color" value="${editAccent}">+</label>`;
+  $$('.sw[data-c]', box).forEach((b) => (b.onclick = () => { editAccent = b.dataset.c; renderSwatches(); renderBannerPrev(bannerUrlNow()); }));
+  $('input', box).oninput = (e) => { editAccent = e.target.value; renderSwatches(); renderBannerPrev(bannerUrlNow()); };
+}
+function bannerUrlNow() {
+  if (pendingBanner === null) return null;
+  if (pendingBanner) return URL.createObjectURL(new Blob([pendingBanner], { type: 'image/jpeg' }));
+  return me.banner_url;
+}
+function renderFavPick() {
+  $('#favPick').innerHTML = gamesCatalog.filter((g) => g.id !== 'other').map((g) =>
+    `<button type="button" class="fp ${editFavs.includes(g.id) ? 'on' : ''}" data-id="${esc(g.id)}">${gameIconHtml(g, 'sm')}${esc(g.name)}</button>`).join('');
+  $$('#favPick .fp').forEach((b) => (b.onclick = () => {
+    const id = b.dataset.id;
+    if (editFavs.includes(id)) editFavs = editFavs.filter((x) => x !== id);
+    else if (editFavs.length < 3) editFavs.push(id);
+    else { $('#editErr').textContent = 'You can pin up to 3 games'; return; }
+    $('#editErr').textContent = '';
+    renderFavPick();
+  }));
+}
+$('#bannerBtn').addEventListener('click', async () => {
+  try {
+    const bytes = await api.pickImage('banner');
+    if (!bytes) return;
+    pendingBanner = bytes;
+    renderBannerPrev(bannerUrlNow());
+  } catch (e) { $('#editErr').textContent = cleanErr(e); }
+});
+$('#bannerClear').addEventListener('click', () => { pendingBanner = null; renderBannerPrev(null); });
 $('#avatarBtn').addEventListener('click', async () => {
   try {
     const bytes = await api.pickImage();
@@ -490,7 +586,17 @@ $('#avatarBtn').addEventListener('click', async () => {
 $('#editSave').addEventListener('click', async () => {
   const btn = $('#editSave'); btn.disabled = true;
   try {
-    const patch = { display_name: $('#editName').value.trim() || me.username, bio: $('#editBio').value.trim() };
+    const links = {};
+    $$('[data-link]').forEach((i) => { const h = cleanHandle(i.value); if (h) links[i.dataset.link] = h; });
+    const patch = { display_name: $('#editName').value.trim() || me.username, bio: $('#editBio').value.trim(),
+      accent_color: editAccent, favorite_games: editFavs, links };
+    if (pendingBanner === null) patch.banner_url = null;
+    else if (pendingBanner) {
+      const bpath = `${me.id}/banner-${Date.now()}.jpg`;
+      const { error } = await sb.storage.from('clips').upload(bpath, new Blob([pendingBanner], { type: 'image/jpeg' }), { contentType: 'image/jpeg' });
+      if (error) throw error;
+      patch.banner_url = publicUrl(bpath);
+    }
     if (pendingAvatar) {
       const path = `${me.id}/avatar-${Date.now()}.jpg`;
       const { error } = await sb.storage.from('clips').upload(path, new Blob([pendingAvatar], { type: 'image/jpeg' }), { contentType: 'image/jpeg' });

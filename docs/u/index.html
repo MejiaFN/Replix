@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Replix profile</title>
+<meta property="og:title" content="Replix profile">
+<meta property="og:description" content="Game clips on Replix.">
+<meta property="og:site_name" content="Replix">
+<meta name="theme-color" content="#00e5ff">
+<link rel="icon" href="../icon.png">
+<link rel="stylesheet" href="../site.css">
+</head><body>
+<header class="top">
+  <a class="logo" href="../"><img src="../icon.png" alt="">REPLIX</a>
+  <div class="spacer"></div>
+  <a class="btn primary" data-download>Get Replix</a>
+</header>
+<main class="wrap" id="main"><div class="msg">Loading profile…</div></main>
+<script src="../site.js"></script>
+<script>
+(async () => {
+  const main = document.getElementById('main');
+  const name = (new URLSearchParams(location.search).get('name') || '').replace(/[^\w]/g, '');
+  if (!name) { main.innerHTML = '<div class="msg"><b>Profile not found</b></div>'; return; }
+  try {
+    const [p] = await rxGet(`profiles?username=ilike.${name}&select=*`);
+    if (!p) { main.innerHTML = '<div class="msg"><b>Profile not found</b>Check the username.</div>'; return; }
+    const [[st], posts] = await Promise.all([
+      rxGet(`profile_stats?id=eq.${p.id}&select=*`),
+      rxGet(`post_feed?user_id=eq.${p.id}&select=*&order=created_at.desc&limit=60`),
+    ]);
+    document.title = `${p.display_name || p.username} (@${p.username}) · Replix`;
+    if (p.accent_color) document.documentElement.style.setProperty('--accent', p.accent_color);
+    const links = p.links || {};
+    main.innerHTML = `
+      <div class="phero ${p.banner_url ? 'art' : ''}" style="${p.banner_url ? `--art:url('${rxEsc(p.banner_url)}')` : ''}">
+        <div class="row" style="align-items:flex-end">
+          ${rxAvatar(p)}
+          <div>
+            <h1>${rxEsc(p.display_name || p.username)}</h1>
+            <div class="handle">@${rxEsc(p.username)}</div>
+            ${p.bio ? `<p class="bio">${rxEsc(p.bio)}</p>` : ''}
+            <div class="links">${Object.keys(SOC).filter((k) => links[k]).map((k) => SOC[k][1]
+              ? `<a href="${SOC[k][1](encodeURIComponent(links[k]))}" target="_blank" rel="noopener"><b>${SOC[k][0]}</b>${rxEsc(links[k])}</a>`
+              : `<span><b>${SOC[k][0]}</b>${rxEsc(links[k])}</span>`).join('')}</div>
+            <div class="stats" style="margin-top:10px"><b>${st ? st.posts : 0}</b> clips · <b>${st ? st.followers : 0}</b> followers · <b>${st ? st.following : 0}</b> following</div>
+          </div>
+        </div>
+      </div>
+      <div class="grid">${posts.map((x) => `
+        <a class="tile" href="../c/?id=${x.id}"><div class="th" style="background-image:url('${rxFile(x.thumb_path)}')"></div>
+          <div class="tm"><b>${rxEsc(x.title)}</b><span>${x.game_name ? rxEsc(x.game_name) + ' · ' : ''}♥ ${x.like_count} · ${rxAgo(x.created_at)}</span></div></a>`).join('')
+        || '<div class="msg" style="grid-column:1/-1">No clips posted yet.</div>'}</div>
+      <div class="cta"><div><b>Follow ${rxEsc(p.display_name || p.username)} on Replix</b><span>Get the app to follow players and games, and post your own clips.</span></div><a class="btn primary" href="${RX.download}">Download Replix</a></div>`;
+  } catch (e) {
+    main.innerHTML = '<div class="msg"><b>Couldn\'t load this profile</b>Try again in a moment.</div>';
+  }
+})();
+</script>
+</body></html>

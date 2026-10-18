@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data: blob: https://*.supabase.co; media-src 'self' file: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data: blob: https://*.supabase.co https://*.steamstatic.com; media-src 'self' file: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self'">
 <title>Replix</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="social.css">
@@ -158,15 +158,18 @@
           <h1 id="profName"></h1>
           <div class="phandle" id="profHandle"></div>
           <p class="bio" id="profBio"></p>
+          <div class="plinks" id="profLinks"></div>
           <div class="pstats"><span><b id="profPosts">0</b> clips</span><span><b id="profFollowers">0</b> followers</span><span><b id="profFollowing">0</b> following</span></div>
         </div>
         <div class="spacer"></div>
         <div class="pbtns">
           <button class="btn primary" id="profFollowBtn">Follow</button>
           <button class="btn ghost" id="profEditBtn" hidden>Edit profile</button>
+          <button class="btn ghost" id="profShareBtn" title="Copy a link to this profile"><svg class="ic"><use href="#i-link"/></svg>Share</button>
           <button class="btn ghost" id="profSignOut" hidden>Sign out</button>
         </div>
       </div>
+      <div class="pfav" id="profFav"></div>
       <div class="page wide"><div class="grid" id="profGrid"></div>
         <div class="empty" id="profEmpty" hidden><svg><use href="#i-clips"/></svg><div class="big">No clips posted yet</div></div>
       </div>
@@ -603,9 +606,23 @@
   <div class="mbox wide">
     <button class="mclose" data-close>✕</button>
     <h3>Edit profile</h3>
+    <div class="editscroll">
+    <div class="bannerprev" id="editBanner"><button class="btn ghost small" id="bannerBtn">Change banner</button><button class="btn ghost small" id="bannerClear" title="Remove banner">✕</button></div>
     <div class="avrow"><div class="avatar lg" id="editAvatar"></div><button class="btn ghost small" id="avatarBtn">Change picture</button></div>
     <label class="fld">Display name<input id="editName" maxlength="40"></label>
     <label class="fld">Bio<textarea id="editBio" maxlength="160" rows="3" placeholder="Main: Fortnite. Clips daily."></textarea></label>
+    <div class="fld">Accent color<div class="swatches" id="swatches"></div></div>
+    <div class="fld">Favorite games <small class="muted2">(pick up to 3)</small><div class="favpick" id="favPick"></div></div>
+    <div class="fld">Socials <small class="muted2">(just your username)</small>
+      <div class="linkgrid">
+        <label><span>Twitch</span><input data-link="twitch" maxlength="40" placeholder="username"></label>
+        <label><span>YouTube</span><input data-link="youtube" maxlength="40" placeholder="@handle"></label>
+        <label><span>TikTok</span><input data-link="tiktok" maxlength="40" placeholder="@username"></label>
+        <label><span>X</span><input data-link="x" maxlength="40" placeholder="@username"></label>
+        <label><span>Instagram</span><input data-link="instagram" maxlength="40" placeholder="username"></label>
+        <label><span>Discord</span><input data-link="discord" maxlength="40" placeholder="username"></label>
+      </div></div>
+    </div>
     <div class="ferr" id="editErr"></div>
     <div class="mrow"><button class="btn ghost small" data-close>Cancel</button><button class="btn primary small" id="editSave">Save</button></div>
   </div>

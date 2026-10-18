@@ -514,17 +514,22 @@ function setupIpc() {
     if (file !== p) { try { fs.unlinkSync(file); } catch {} }
     return out;
   });
-  ipcMain.handle('social:pickImage', async () => {
-    const r = await dialog.showOpenDialog(mainWin, { title: 'Choose a profile picture', properties: ['openFile'], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }] });
+  // kind 'avatar' -> 256x256 square, 'banner' -> 1500x500 (3:1)
+  ipcMain.handle('social:pickImage', async (_e, kind = 'avatar') => {
+    const r = await dialog.showOpenDialog(mainWin, { title: kind === 'banner' ? 'Choose a profile banner' : 'Choose a profile picture', properties: ['openFile'], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }] });
     if (r.canceled) return null;
     const f = r.filePaths[0];
-    if (fs.statSync(f).size > 5 * 1024 * 1024) throw new Error('Pick an image under 5 MB');
+    if (fs.statSync(f).size > 10 * 1024 * 1024) throw new Error('Pick an image under 10 MB');
     // Re-encode to a 256px JPEG so avatars stay small.
     const img = require('electron').nativeImage.createFromPath(f);
     if (img.isEmpty()) throw new Error('That image could not be read');
-    const sz = img.getSize(), side = Math.min(sz.width, sz.height);
-    const sq = img.crop({ x: Math.floor((sz.width - side) / 2), y: Math.floor((sz.height - side) / 2), width: side, height: side }).resize({ width: 256, height: 256, quality: 'best' });
-    return sq.toJPEG(88);
+    const sz = img.getSize();
+    const ratio = kind === 'banner' ? 3 : 1, out = kind === 'banner' ? { width: 1500, height: 500 } : { width: 256, height: 256 };
+    // Center-crop to the target shape, then resize.
+    let w = sz.width, h = Math.round(sz.width / ratio);
+    if (h > sz.height) { h = sz.height; w = Math.round(sz.height * ratio); }
+    const cropped = img.crop({ x: Math.floor((sz.width - w) / 2), y: Math.floor((sz.height - h) / 2), width: w, height: h }).resize({ ...out, quality: 'best' });
+    return cropped.toJPEG(86);
   });
   ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
   ipcMain.handle('capture:screenshot', takeScreenshot);

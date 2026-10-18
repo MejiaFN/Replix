@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Replix clip</title>
+<meta property="og:title" content="Watch this clip on Replix">
+<meta property="og:description" content="Replix: free game clipping for Windows.">
+<meta property="og:site_name" content="Replix">
+<meta name="theme-color" content="#00e5ff">
+<link rel="icon" href="../icon.png">
+<link rel="stylesheet" href="../site.css">
+</head><body>
+<header class="top">
+  <a class="logo" href="../"><img src="../icon.png" alt="">REPLIX</a>
+  <div class="spacer"></div>
+  <a class="btn primary" data-download>Get Replix</a>
+</header>
+<main class="wrap" id="main"><div class="msg">Loading clip…</div></main>
+<script src="../site.js"></script>
+<script>
+(async () => {
+  const main = document.getElementById('main');
+  const id = new URLSearchParams(location.search).get('id') || '';
+  if (!/^[0-9a-f-]{36}$/i.test(id)) { main.innerHTML = '<div class="msg"><b>Clip not found</b>This link looks incomplete.</div>'; return; }
+  try {
+    const [p] = await rxGet(`post_feed?id=eq.${id}&select=*`);
+    if (!p) { main.innerHTML = '<div class="msg"><b>Clip not found</b>It may have been deleted.</div>'; return; }
+    document.title = `${p.title} · Replix`;
+    main.innerHTML = `
+      <div class="card">
+        <video src="${rxFile(p.video_path)}" poster="${rxFile(p.thumb_path)}" controls playsinline preload="metadata"></video>
+        <div class="meta">
+          <h1>${rxEsc(p.title)}</h1>
+          <div class="row">
+            <a class="row who" href="../u/?name=${encodeURIComponent(p.username)}">${rxAvatar(p)}<div><b>${rxEsc(p.display_name || p.username)}</b><span>@${rxEsc(p.username)} · ${rxAgo(p.created_at)}</span></div></a>
+            <div class="spacer"></div>
+            ${p.game_name ? `<span class="chip"><i style="--gc:${rxEsc(p.game_color)};${p.game_image ? `background-image:url('${rxEsc(p.game_image)}')` : ''}"></i>${rxEsc(p.game_name)}</span>` : ''}
+            <span class="stats">♥ ${p.like_count} · 💬 ${p.comment_count}</span>
+          </div>
+        </div>
+      </div>
+      <div class="cta"><div><b>Clip your best moments too</b><span>Replix saves the last minute of your game with one key, free on Windows.</span></div><a class="btn primary" href="${RX.download}">Download Replix</a></div>`;
+  } catch (e) {
+    main.innerHTML = '<div class="msg"><b>Couldn\'t load this clip</b>Try again in a moment.</div>';
+  }
+})();
+</script>
+</body></html>

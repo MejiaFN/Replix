@@ -1,6 +1,6 @@
 {
   "name": "replix",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Replix - replay buffer clipping & screen recording for Windows",
   "main": "src/main.js",
   "scripts": {
