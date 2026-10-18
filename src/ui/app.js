@@ -60,7 +60,9 @@ function renderStatus() {
   $('#gameNow').textContent = status.game ? `Playing ${status.game}` : 'No game detected';
 
   const hero = $('#hero');
-  hero.className = 'hero' + (rec ? ' rec' : on ? '' : ' off');
+  // Toggle state classes only; the card also carries layout classes (scard capture).
+  hero.classList.toggle('rec', rec);
+  hero.classList.toggle('off', !rec && !on);
   $('#heroDot').className = 'bigdot' + (rec ? ' rec' : on ? ' on' : '');
   $('#heroTitle').textContent = rec ? 'Recording' : on ? 'Replay buffer is on' : 'Replay buffer is off';
   $('#heroBuffer').textContent = on ? 'Turn off' : 'Turn on';

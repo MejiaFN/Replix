@@ -115,7 +115,7 @@
 .gtext h1, .ptext h1 { margin: 0; font-size: 26px; }
 .gtext span { color: var(--dim); }
 .ptext { min-width: 0; }
-.handle { color: var(--dim); margin-top: 2px; }
+.phandle { color: var(--dim); margin-top: 2px; }
 .bio { margin: 8px 0 0; max-width: 520px; line-height: 1.5; }
 .bio:empty { display: none; }
 .pstats { display: flex; gap: 18px; margin-top: 10px; color: var(--dim); }
@@ -153,9 +153,9 @@
 .gpick { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px 12px; border-radius: 12px; border: 1px solid var(--line2); background: #0a0a0e; }
 .gpick:hover { border-color: #44444f; }
 .gpick b { font-size: 13px; text-align: center; }
-.gpick span { font-size: 11.5px; color: var(--dim); font-weight: 600; }
+.gpick > span:last-child { font-size: 11.5px; font-weight: 600; }
 .gpick.on { border-color: var(--cyan); background: rgba(0,229,255,.06); }
-.gpick.on span { color: var(--cyan); }
+
 .avrow { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
 .post-modal { width: 760px; padding: 0; background: transparent; border: 0; box-shadow: none; }
 .post-modal .mclose { z-index: 2; top: -36px; right: 0; color: #fff; }
@@ -166,3 +166,7 @@
 .scard.capture .hero-state { display: flex; align-items: center; }
 .scard.capture .hero-actions { display: flex; gap: 8px; }
 .scard.capture .hero-actions .btn { flex: 1; justify-content: center; }
+.mbox .searchbox input { width: auto; height: auto; border: 0; background: none; padding: 0; }
+.gpick .gicon { color: #fff; }
+.gpick > span:last-child { color: var(--dim); }
+.gpick.on > span:last-child { color: var(--cyan); }
