@@ -368,6 +368,11 @@ function inOutputDir(p) {
   return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
+function mediaDuration(p) {
+  return new Promise((resolve) => require('child_process').execFile(ffmpegPath, ['-hide_banner', '-i', p], { windowsHide: true },
+    (_e, _o, err) => { const m = /Duration: (\d+):(\d+):([\d.]+)/.exec(err || ''); resolve(m ? m[1] * 3600 + m[2] * 60 + Number(m[3]) : 30); }));
+}
+
 // ---------- Discord ----------
 // Uploads a clip to the user's Discord webhook (squeezing it under the 10 MB limit if needed)
 // and copies the attachment link.
@@ -493,6 +498,35 @@ function setupIpc() {
     return out;
   });
   ipcMain.handle('share:discord', async (_e, p) => shareToDiscord(p));
+  // Social: read a clip (shrunk to fit the 50 MB upload limit if needed) plus a thumbnail, for posting.
+  ipcMain.handle('social:prepareUpload', async (_e, p) => {
+    if (!inOutputDir(p) || !/\.mp4$/i.test(p)) throw new Error('Only MP4 clips can be posted');
+    const tmp = path.join(app.getPath('temp'), 'replix', 'upload');
+    fs.mkdirSync(tmp, { recursive: true });
+    const duration = await mediaDuration(p);
+    let file = p;
+    if (fs.statSync(p).size > 45 * 1024 * 1024) {
+      file = await recorder.exportClip(p, { start: 0, end: duration, targetMB: 40, tracks: await recorder.audioTrackCount(p), outDir: tmp });
+    }
+    const thumb = path.join(tmp, 'thumb.jpg');
+    await recorder.thumbnail(file, thumb);
+    const out = { video: fs.readFileSync(file), thumb: fs.existsSync(thumb) ? fs.readFileSync(thumb) : null, duration, size: fs.statSync(file).size };
+    if (file !== p) { try { fs.unlinkSync(file); } catch {} }
+    return out;
+  });
+  ipcMain.handle('social:pickImage', async () => {
+    const r = await dialog.showOpenDialog(mainWin, { title: 'Choose a profile picture', properties: ['openFile'], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }] });
+    if (r.canceled) return null;
+    const f = r.filePaths[0];
+    if (fs.statSync(f).size > 5 * 1024 * 1024) throw new Error('Pick an image under 5 MB');
+    // Re-encode to a 256px JPEG so avatars stay small.
+    const img = require('electron').nativeImage.createFromPath(f);
+    if (img.isEmpty()) throw new Error('That image could not be read');
+    const sz = img.getSize(), side = Math.min(sz.width, sz.height);
+    const sq = img.crop({ x: Math.floor((sz.width - side) / 2), y: Math.floor((sz.height - side) / 2), width: side, height: side }).resize({ width: 256, height: 256, quality: 'best' });
+    return sq.toJPEG(88);
+  });
+  ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
   ipcMain.handle('capture:screenshot', takeScreenshot);
   ipcMain.handle('games:current', () => ({ current: currentGame && currentGame.name, fg: lastFg && { exe: lastFg.exe, title: lastFg.title } }));
   ipcMain.handle('clips:trim', async (_e, p, start, end) => {

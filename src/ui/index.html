@@ -1,8 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; media-src 'self' file:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data: blob: https://*.supabase.co; media-src 'self' file: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self'">
 <title>Replix</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="social.css">
 </head>
 <body>
 <!-- Icon sprite (stroke icons) -->
@@ -34,6 +35,12 @@
     <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
     <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 21V4M4 4h13l-2 4 2 4H4"/></symbol>
     <symbol id="i-pad" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M7 10v4M5 12h4M15.5 11h.01M18 13h.01"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.5-9.3C1.2 8.5 3.2 5 6.6 5c2 0 3.4 1.2 5.4 3.2C14 6.2 15.4 5 17.4 5c3.4 0 5.4 3.5 4.1 6.7C19.5 16.4 12 21 12 21z"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 21V9m0 0-5 5m5-5 5 5M4 3h16"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></symbol>
   </defs>
 </svg>
@@ -62,41 +69,106 @@
     <button class="rbtn" data-view="albums" title="Albums"><svg><use href="#i-albums"/></svg></button>
     <div class="spacer"></div>
     <div class="storage" id="railStorage" title="Space used by your clips"><svg class="ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15"/><circle cx="18" cy="18" r="15" id="ringFill"/></svg><span id="railStorageText">0 MB</span></div>
+    <button class="rbtn acct" id="acctBtn" title="Account"><span class="avatar sm" id="railAvatar"><svg><use href="#i-user"/></svg></span></button>
     <button class="rbtn" data-view="settings" title="Settings"><svg><use href="#i-settings"/></svg><span class="rdot" id="updateDot" hidden></span></button>
   </nav>
 
   <main id="main">
     <!-- HOME -->
     <section class="view" id="view-home">
-      <div class="page narrow">
-        <div class="hero" id="hero">
-          <div class="hero-state">
-            <span class="bigdot" id="heroDot"></span>
-            <div>
-              <div class="hero-title" id="heroTitle">Starting…</div>
-              <div class="hero-sub" id="heroSub"></div>
+      <div class="social">
+        <div class="feedcol">
+          <!-- followed games, like Medal's story row -->
+          <div class="gamerow" id="gameRow"></div>
+
+          <div class="notice" id="setupNotice" hidden>
+            <svg><use href="#i-info"/></svg>
+            <div><b>Online features aren't connected yet</b><span>Add your Supabase project details in <code>src/ui/config.js</code> to turn on accounts and feeds.</span></div>
+          </div>
+          <div class="notice cta" id="signinNotice" hidden>
+            <svg><use href="#i-user"/></svg>
+            <div><b>Join Replix</b><span>Create an account to follow games and people, post clips, like and comment.</span></div>
+            <button class="btn primary small" data-auth="signup">Create account</button>
+          </div>
+
+          <div class="feedtabs" id="feedTabs">
+            <button class="active" data-feed="foryou">For you</button>
+            <button data-feed="following">Following</button>
+            <button data-feed="latest">Latest</button>
+          </div>
+          <div class="feed" id="feed"></div>
+          <div class="feedmore"><button class="btn ghost small" id="feedMore" hidden>Load more</button></div>
+          <div class="empty" id="feedEmpty" hidden>
+            <svg><use href="#i-clips"/></svg>
+            <div class="big" id="feedEmptyTitle">No clips yet</div>
+            <div id="feedEmptyText">Follow some games or people, or be the first to post.</div>
+          </div>
+        </div>
+
+        <aside class="sidecol">
+          <div class="scard" id="meCard"></div>
+          <div class="scard capture" id="hero">
+            <div class="hero-state">
+              <span class="bigdot" id="heroDot"></span>
+              <div><div class="hero-title" id="heroTitle">Starting…</div><div class="hero-sub" id="heroSub"></div></div>
+            </div>
+            <div class="hero-actions">
+              <button class="btn ghost small" id="heroBuffer">Turn off</button>
+              <button class="btn primary small" id="heroClip"><svg class="ic"><use href="#i-scissors"/></svg>Clip it</button>
+            </div>
+            <div class="ministats">
+              <div><b id="statClips">0</b><span>Clips</span></div>
+              <div><b id="statToday">0</b><span>Today</span></div>
+              <div><b id="statSize">0 MB</b><span>On PC</span></div>
             </div>
           </div>
-          <div class="hero-actions">
-            <button class="btn ghost" id="heroBuffer">Turn off</button>
-            <button class="btn primary" id="heroClip"><svg class="ic"><use href="#i-scissors"/></svg>Clip it</button>
+          <div class="scard" id="suggestCard" hidden>
+            <h4>People to follow</h4>
+            <div id="suggestList"></div>
           </div>
-        </div>
+          <div class="scard" id="trendCard">
+            <h4>Games</h4>
+            <div class="trendlist" id="trendList"></div>
+            <button class="link" id="allGamesBtn">Browse all games →</button>
+          </div>
+        </aside>
+      </div>
+    </section>
 
-        <div class="stats">
-          <div class="stat"><svg><use href="#i-scissors"/></svg><div><b id="statClips">0</b><span>Clips</span></div></div>
-          <div class="stat"><svg><use href="#i-film"/></svg><div><b id="statRecs">0</b><span>Recordings</span></div></div>
-          <div class="stat"><svg><use href="#i-sparkle"/></svg><div><b id="statToday">0</b><span>Saved today</span></div></div>
-          <div class="stat"><svg><use href="#i-hdd"/></svg><div><b id="statSize">0 MB</b><span>On this PC</span></div></div>
-        </div>
+    <!-- GAME PAGE -->
+    <section class="view" id="view-game" hidden>
+      <div class="gamehero" id="gameHero">
+        <button class="tbtn" data-back><svg class="ic"><use href="#i-back"/></svg></button>
+        <div class="gicon big" id="gameIcon"></div>
+        <div class="gtext"><h1 id="gameName"></h1><span id="gameMeta"></span></div>
+        <div class="spacer"></div>
+        <button class="btn primary" id="gameFollowBtn">Follow</button>
+      </div>
+      <div class="social single"><div class="feedcol"><div class="feed" id="gameFeed"></div>
+        <div class="empty" id="gameFeedEmpty" hidden><svg><use href="#i-game"/></svg><div class="big">No clips for this game yet</div><div>Clip something and post it to get things started.</div></div>
+      </div></div>
+    </section>
 
-        <div class="sechead"><h2>Recent clips</h2><button class="link" data-goto="clips">View all →</button></div>
-        <div class="grid" id="homeGrid"></div>
-        <div class="empty" id="homeEmpty" hidden>
-          <svg><use href="#i-scissors"/></svg>
-          <div class="big">No clips yet</div>
-          <div>Play something, then press <kbd id="emptyKey">F8</kbd> to save the last moments.</div>
+    <!-- PROFILE PAGE -->
+    <section class="view" id="view-profile" hidden>
+      <div class="profhero">
+        <button class="tbtn" data-back><svg class="ic"><use href="#i-back"/></svg></button>
+        <div class="avatar xl" id="profAvatar"></div>
+        <div class="ptext">
+          <h1 id="profName"></h1>
+          <div class="handle" id="profHandle"></div>
+          <p class="bio" id="profBio"></p>
+          <div class="pstats"><span><b id="profPosts">0</b> clips</span><span><b id="profFollowers">0</b> followers</span><span><b id="profFollowing">0</b> following</span></div>
         </div>
+        <div class="spacer"></div>
+        <div class="pbtns">
+          <button class="btn primary" id="profFollowBtn">Follow</button>
+          <button class="btn ghost" id="profEditBtn" hidden>Edit profile</button>
+          <button class="btn ghost" id="profSignOut" hidden>Sign out</button>
+        </div>
+      </div>
+      <div class="page wide"><div class="grid" id="profGrid"></div>
+        <div class="empty" id="profEmpty" hidden><svg><use href="#i-clips"/></svg><div class="big">No clips posted yet</div></div>
       </div>
     </section>
 
@@ -175,6 +247,7 @@
           <button class="tbtn" id="backBtn"><svg class="ic"><use href="#i-back"/></svg></button>
           <div class="pname" id="pname"></div>
           <div class="pactions">
+            <button class="btn primary small" id="postBtn"><svg class="ic"><use href="#i-upload"/></svg>Post</button>
             <button class="btn ghost small" id="shareBtn"><svg class="ic"><use href="#i-share"/></svg>Share to Discord</button>
             <button class="btn ghost small" id="renameBtn">Rename</button>
             <button class="btn ghost small" id="revealBtn"><svg class="ic"><use href="#i-folder"/></svg>Show in folder</button>
@@ -482,5 +555,63 @@
     <div class="mrow"><button class="btn ghost small" id="mCancel">Cancel</button><button class="btn primary small" id="mOk">Create</button></div>
   </div>
 </div>
+<!-- account: sign in / create account -->
+<div class="modal" id="authModal" hidden>
+  <div class="mbox wide">
+    <button class="mclose" data-close>✕</button>
+    <div class="authlogo"><img src="icon.png" alt=""><b>REPLIX</b></div>
+    <div class="seg full" id="authTabs"><button class="active" data-tab="signin">Sign in</button><button data-tab="signup">Create account</button></div>
+    <form id="authForm" autocomplete="on">
+      <label class="fld" data-only="signup">Username<input name="username" maxlength="20" placeholder="3–20 letters, numbers or _" autocomplete="username"><small id="userHint"></small></label>
+      <label class="fld">Email<input name="email" type="email" placeholder="you@example.com" autocomplete="email" required></label>
+      <label class="fld">Password<input name="password" type="password" placeholder="At least 8 characters" autocomplete="current-password" required minlength="8"></label>
+      <label class="chk" data-only="signup"><input type="checkbox" name="agree"> I'm 13 or older and I'll follow the community rules: no cheating tools, harassment, hate, nudity, or content that isn't mine.</label>
+      <div class="ferr" id="authErr"></div>
+      <button class="btn primary full" id="authSubmit" type="submit">Sign in</button>
+      <button class="link center" type="button" id="forgotBtn" data-only="signin">Forgot password?</button>
+    </form>
+  </div>
+</div>
+
+<!-- post a clip -->
+<div class="modal" id="postModal" hidden>
+  <div class="mbox wide">
+    <button class="mclose" data-close>✕</button>
+    <h3>Post clip</h3>
+    <div class="postprev" id="postPrev"></div>
+    <label class="fld">Title<input id="postTitle" maxlength="100" placeholder="What happened?"></label>
+    <label class="fld">Game<select id="postGame"></select></label>
+    <p class="hint">Anyone can watch posted clips. Big clips are shrunk to under 50 MB before uploading.</p>
+    <div class="ferr" id="postErr"></div>
+    <div class="mrow"><button class="btn ghost small" data-close>Cancel</button><button class="btn primary small" id="postSubmit"><svg class="ic"><use href="#i-share"/></svg>Post</button></div>
+  </div>
+</div>
+
+<!-- browse / follow games -->
+<div class="modal" id="gamesModal" hidden>
+  <div class="mbox xwide">
+    <button class="mclose" data-close>✕</button>
+    <h3>Games</h3>
+    <p class="hint">Follow games to see their clips on your Home feed.</p>
+    <label class="searchbox full"><svg class="ic"><use href="#i-search"/></svg><input id="gameSearch" placeholder="Search games"></label>
+    <div class="gamepick" id="gamePick"></div>
+  </div>
+</div>
+
+<!-- edit profile -->
+<div class="modal" id="profileModal" hidden>
+  <div class="mbox wide">
+    <button class="mclose" data-close>✕</button>
+    <h3>Edit profile</h3>
+    <div class="avrow"><div class="avatar lg" id="editAvatar"></div><button class="btn ghost small" id="avatarBtn">Change picture</button></div>
+    <label class="fld">Display name<input id="editName" maxlength="40"></label>
+    <label class="fld">Bio<textarea id="editBio" maxlength="160" rows="3" placeholder="Main: Fortnite. Clips daily."></textarea></label>
+    <div class="ferr" id="editErr"></div>
+    <div class="mrow"><button class="btn ghost small" data-close>Cancel</button><button class="btn primary small" id="editSave">Save</button></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
 <script src="app.js"></script>
+<script src="social.js"></script>
 </body></html>

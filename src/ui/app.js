@@ -54,7 +54,6 @@ function renderStatus() {
   $('#clipChip').disabled = !on;
   $('#recKey').textContent = settings.recordHotkey || '—';
   $('#recChip').classList.toggle('rec', rec);
-  $('#emptyKey').textContent = settings.clipHotkey || '—';
   $('#gameChip').hidden = settings.gameDetection === false;
   $('#gameChip').classList.toggle('playing', !!status.game);
   $('#gameLabel').textContent = status.game || 'Waiting for game';
@@ -149,13 +148,9 @@ async function loadClips() {
 api.onClipsChanged(loadClips);
 
 // ---------- home ----------
+// Capture summary in the Home sidebar (the feed itself lives in social.js).
 function renderHome() {
-  const g = $('#homeGrid');
-  g.replaceChildren(...clips.slice(0, 8).map((c) => makeCard(c, { selectable: false })));
-  $('#homeEmpty').hidden = clips.length > 0;
-  g.hidden = clips.length === 0;
-  $('#statClips').textContent = clips.filter((c) => c.kind === 'clip').length;
-  $('#statRecs').textContent = clips.filter((c) => c.kind === 'recording').length;
+  $('#statClips').textContent = clips.filter((c) => c.kind === 'clip' || c.kind === 'recording').length;
   $('#statToday').textContent = clips.filter((c) => isToday(c.mtime)).length;
   $('#statSize').textContent = fmtSize(clips.reduce((n, c) => n + c.size, 0));
 }

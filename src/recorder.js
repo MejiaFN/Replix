@@ -372,7 +372,8 @@ class Recorder extends EventEmitter {
     const s = this.settings;
     const dur = Math.max(0.5, opts.end - opts.start);
     const tag = opts.format === 'gif' ? 'gif' : opts.targetMB ? `${opts.targetMB}MB` : opts.crop === 'vertical' ? 'vertical' : 'edit';
-    const out = input.replace(/(\.\w+)$/, `_${tag}_${stamp()}.${opts.format === 'gif' ? 'gif' : 'mp4'}`);
+    let out = input.replace(/(\.\w+)$/, `_${tag}_${stamp()}.${opts.format === 'gif' ? 'gif' : 'mp4'}`);
+    if (opts.outDir) out = path.join(opts.outDir, path.basename(out)); // e.g. a temp copy for uploading
     const vf = [];
     if (opts.crop === 'vertical') {
       // 9:16 window across the frame; cropX picks its horizontal position.

@@ -1,14 +1,15 @@
 {
   "name": "replix",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Replix - replay buffer clipping & screen recording for Windows",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win",
     "release": "electron-builder --win --publish always",
-    "prerelease": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-    "predist": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+    "prerelease": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true,maxRetries:10,retryDelay:500})\"",
+    "predist": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true,maxRetries:10,retryDelay:500})\"",
+    "vendor": "node -e \"require('fs').copyFileSync('node_modules/@supabase/supabase-js/dist/umd/supabase.js','src/ui/vendor/supabase.js')\""
   },
   "author": "Replix",
   "license": "ISC",
@@ -25,7 +26,8 @@
   "private": true,
   "devDependencies": {
     "electron": "^33.4.11",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "@supabase/supabase-js": "^2.118.0"
   },
   "build": {
     "appId": "app.replix.clipper",
