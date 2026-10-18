@@ -14,7 +14,7 @@ const DEFAULTS = {
   bufferSeconds: 60,
   // video
   monitor: 0,
-  resolution: '1080', // 'native' | '1440' | '1080' | '900' | '720' | '480'
+  resolution: 'native', // 'native' | '1440' | '1080' | '900' | '720' | '480'
   fps: 60,
   codec: 'h264', // 'h264' | 'hevc'
   encoder: 'auto', // 'auto' | 'nvenc' | 'amf' | 'qsv' | 'cpu'
@@ -32,7 +32,7 @@ const DEFAULTS = {
   micNoiseSuppression: true,
   micEchoCancellation: false,
   splitAudio: true, // save game and mic as separate tracks
-  audioBitrate: 160,
+  audioBitrate: 192,
   // general
   outputDir: '',
   startBufferOnLaunch: true,
@@ -47,7 +47,7 @@ const file = () => path.join(app.getPath('userData'), 'settings.json');
 
 function load() {
   let saved = {};
-  try { saved = JSON.parse(fs.readFileSync(file(), 'utf8')); } catch {}
+  try { saved = JSON.parse(fs.readFileSync(file(), 'utf8').replace(/^﻿/, '')); } catch {} // tolerate a BOM from hand edits
   const s = { ...DEFAULTS, ...saved };
   const legacy = /^h264_(\w+)$/.exec(s.encoder); // v1.0/1.1 stored full encoder names
   if (legacy) s.encoder = legacy[1];

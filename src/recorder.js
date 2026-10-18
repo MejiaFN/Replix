@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SEG_SECONDS = 2;
-const QUALITY = { ultra: 16, high: 19, medium: 23, low: 28 };
+const QUALITY = { ultra: 15, high: 18, medium: 22, low: 27 };
 const VENDOR_ORDER = ['nvenc', 'amf', 'qsv', 'cpu'];
 const TRACK_TITLES = { mix: 'Game + Mic', sys: 'Game', mic: 'Mic' };
 
@@ -24,6 +24,8 @@ function run(ffmpeg, args) {
       (err, _out, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve()));
   });
 }
+
+const codecProfile = (enc) => (enc.startsWith('hevc') ? 'main' : 'high');
 
 class Recorder extends EventEmitter {
   constructor(ffmpegPath, workDir) {
@@ -78,9 +80,20 @@ class Recorder extends EventEmitter {
   }
 
   videoInputArgs(s, display) {
-    const scale = s.resolution === 'native' ? '' : `,scale=-2:${s.resolution}:flags=bicubic`;
+    // Convert with the BT.709 matrix (what players assume for HD video) so colors match the screen,
+    // and downscale with lanczos for a sharper picture.
+    const size = s.resolution === 'native' ? '' : `-2:${s.resolution}:`;
+    const scale = `,scale=${size}flags=lanczos:out_color_matrix=bt709:out_range=tv`;
+    this.gpuPath = false;
     if (this.captureMode === 'ddagrab') {
-      return { input: ['-f', 'lavfi', '-i', `ddagrab=output_idx=${s.monitor}:framerate=${s.fps}:draw_mouse=${s.captureCursor === false ? 0 : 1},hwdownload,format=bgra${scale},format=yuv420p`], vf: [] };
+      const grab = `ddagrab=output_idx=${s.monitor}:framerate=${s.fps}:draw_mouse=${s.captureCursor === false ? 0 : 1}`;
+      // Zero-copy: at native size NVENC takes the captured GPU frames directly and does the
+      // color conversion itself, so no frames are copied through the CPU (no dropped frames at 1440p+).
+      if (s.resolution === 'native' && this.encoder.endsWith('_nvenc')) {
+        this.gpuPath = true;
+        return { input: ['-f', 'lavfi', '-i', grab], vf: [] };
+      }
+      return { input: ['-f', 'lavfi', '-i', `${grab},hwdownload,format=bgra${scale},format=yuv420p`], vf: [] };
     }
     const args = ['-f', 'gdigrab', '-framerate', String(s.fps), '-draw_mouse', s.captureCursor === false ? '0' : '1'];
     if (display) {
@@ -89,10 +102,10 @@ class Recorder extends EventEmitter {
         '-video_size', `${Math.round(b.width * f)}x${Math.round(b.height * f)}`);
     }
     args.push('-i', 'desktop');
-    return { input: args, vf: ['-vf', `format=yuv420p${scale}`] };
+    return { input: args, vf: ['-vf', `${scale.slice(1)},format=yuv420p`] };
   }
 
-  encoderArgs(s) {
+  encoderArgs(s, live = true) {
     const enc = this.encoder;
     const q = String(QUALITY[s.quality] ?? 23);
     const sp = s.encoderPreset || 'balanced'; // speed | balanced | quality
@@ -102,7 +115,9 @@ class Recorder extends EventEmitter {
     const vendor = enc.startsWith('lib') ? 'cpu' : enc.split('_')[1];
     const args = ['-c:v', enc, '-g', String(s.fps)];
     if (vendor === 'nvenc') {
-      args.push('-preset', { speed: 'p2', balanced: 'p4', quality: 'p6' }[sp], '-bf', '0',
+      args.push('-preset', { speed: 'p2', balanced: 'p5', quality: 'p7' }[sp], '-tune', 'hq', '-profile:v', codecProfile(enc),
+        '-spatial-aq', '1', '-temporal-aq', '1', '-aq-strength', '8', '-bf', sp === 'speed' ? '0' : '2',
+        ...(sp === 'quality' ? ['-multipass', 'qres', '-rc-lookahead', '20'] : []),
         ...(cbr ? ['-rc', 'cbr', ...rate] : ['-rc', 'vbr', '-cq', q, '-b:v', '0']));
     } else if (vendor === 'amf') {
       args.push('-quality', sp, ...(cbr ? ['-rc', 'cbr', ...rate] : ['-rc', 'cqp', '-qp_i', q, '-qp_p', q]));
@@ -110,7 +125,10 @@ class Recorder extends EventEmitter {
       args.push('-preset', { speed: 'veryfast', balanced: 'faster', quality: 'medium' }[sp], ...(cbr ? rate : ['-global_quality', q]));
     } else {
       args.push('-preset', { speed: 'superfast', balanced: 'veryfast', quality: 'fast' }[sp], '-pix_fmt', 'yuv420p', ...(cbr ? rate : ['-crf', q]));
+      if (enc === 'libx264') args.push('-profile:v', 'high');
     }
+    // CPU path converts with BT.709 above, so tag it; on the zero-copy path NVENC tags its own conversion.
+    if (live && !this.gpuPath) args.push('-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv');
     if (enc.startsWith('hevc') || enc === 'libx265') args.push('-tag:v', 'hvc1');
     return args;
   }
@@ -193,16 +211,18 @@ class Recorder extends EventEmitter {
     const video = this.videoInputArgs(s, this.display);
     const args = ['-hide_banner', '-loglevel', 'warning', '-y', ...video.input];
     for (const key of inputs) {
-      args.push('-thread_queue_size', '4096', '-use_wallclock_as_timestamps', '1',
+      // Audio timestamps come from the sample count (no wallclock stamping or resampling):
+      // stamping each IPC chunk with the clock made FFmpeg stretch and drop audio, which crackled.
+      args.push('-thread_queue_size', '4096',
         '-f', 's16le', '-ar', '48000', '-ac', '2', '-i', this.pipes[key].name);
     }
     args.push('-map', '0:v', ...video.vf);
     if (inputs.length === 1) {
-      args.push('-filter_complex', '[1:a]aresample=async=1000[a0]', '-map', '[a0]');
+      args.push('-filter_complex', '[1:a]anull[a0]', '-map', '[a0]');
     } else if (inputs.length === 2) {
       // Track 1 = game + mic mixed (what normal players play), 2 = game only, 3 = mic only.
       args.push('-filter_complex',
-        '[1:a]aresample=async=1000,asplit[g1][g2];[2:a]aresample=async=1000,asplit[m1][m2];[g1][m1]amix=inputs=2:normalize=0[mix]',
+        '[1:a]asplit[g1][g2];[2:a]asplit[m1][m2];[g1][m1]amix=inputs=2:normalize=0:dropout_transition=0[mix]',
         '-map', '[mix]', '-map', '[g2]', '-map', '[m2]');
     }
     // -shortest: when the audio pipes close, FFmpeg finishes the files and exits.
@@ -336,7 +356,7 @@ class Recorder extends EventEmitter {
     const out = input.replace(/(\.\w+)$/, `_trim_${stamp()}.mp4`);
     // Re-encode so cuts land exactly on the chosen frames.
     await run(this.ffmpeg, ['-ss', String(start), '-to', String(end), '-i', input, '-map', '0:v:0', '-map', '0:a?',
-      ...this.encoderArgs(this.settings), '-c:a', 'aac', '-b:a', `${this.settings.audioBitrate || 160}k`,
+      ...this.encoderArgs(this.settings, false), '-c:a', 'aac', '-b:a', `${this.settings.audioBitrate || 160}k`,
       '-movflags', '+faststart', out]);
     return out;
   }
