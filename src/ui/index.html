@@ -56,6 +56,15 @@
         <input id="search" class="search" placeholder="Search clips…">
         <button class="btn ghost small" id="openFolder">Open folder</button>
       </div>
+      <div class="selbar" id="selbar" hidden>
+        <button class="selx" id="selClear" title="Clear selection (Esc)">✕</button>
+        <span class="selcount" id="selCount">0 selected</span>
+        <button class="btn ghost small" id="selAll">Select all</button>
+        <div class="spacer"></div>
+        <button class="btn ghost small" id="selReveal">Show in folder</button>
+        <button class="btn ghost small" id="selCopy">Copy to…</button>
+        <button class="btn danger small" id="selDelete">🗑 Delete</button>
+      </div>
       <div class="grid" id="grid"></div>
       <div class="empty" id="empty" hidden>
         <div class="big">No clips yet</div>

@@ -177,7 +177,8 @@ class Recorder extends EventEmitter {
     const inputs = this.audioInputs(s);
     await this._openPipes(inputs);
     this.audioKeys = inputs.length === 2 ? ['mix', ...inputs] : inputs;
-    if (!s.systemAudio && !s.mic) this.audioKeys = []; // silent stream is still recorded, just untitled
+    // A single track is named after what is actually in it.
+    if (inputs.length === 1) this.audioKeys = s.systemAudio && s.mic ? ['mix'] : s.systemAudio ? ['sys'] : s.mic ? ['mic'] : [];
     const wrap = Math.ceil(s.bufferSeconds / SEG_SECONDS) + 3;
     const segOpts = `segment_time=${SEG_SECONDS}:segment_wrap=${wrap}:reset_timestamps=1:segment_format=mpegts`;
     // Unique name per FFmpeg run so a restart never overwrites older buffered footage;

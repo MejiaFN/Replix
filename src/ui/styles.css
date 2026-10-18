@@ -131,3 +131,20 @@ input[type=checkbox] { accent-color: var(--cyan); width: 16px; height: 16px; }
 .settab.active { background: var(--panel2); color: var(--cyan); box-shadow: inset 0 -2px 0 var(--cyan); }
 .card .hint b { color: var(--text); font-weight: 600; }
 #micBtn.muted { border-color: var(--pink); color: var(--pink); }
+
+/* clip selection */
+.thumb .sel { position: absolute; right: 8px; top: 8px; width: 24px; height: 24px; border-radius: 7px; border: 2px solid rgba(255,255,255,.85);
+  background: rgba(0,0,0,.45); color: #021018; font-size: 14px; font-weight: 900; display: grid; place-items: center; padding: 0;
+  opacity: 0; transition: opacity .12s, background .12s; }
+.clip:hover .sel, .grid.selecting .sel, .clip.selected .sel { opacity: 1; }
+.thumb .sel:hover { border-color: var(--cyan); }
+.clip.selected { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan), var(--glow); }
+.clip.selected .sel { background: var(--cyan); border-color: var(--cyan); }
+.clip.selected .thumb::after { content: ''; position: absolute; inset: 0; background: rgba(0,229,255,.12); }
+.selbar { position: sticky; top: -20px; z-index: 5; display: flex; align-items: center; gap: 10px; margin: -6px 0 16px; padding: 10px 14px;
+  background: rgba(14,14,25,.96); border: 1px solid rgba(0,229,255,.45); border-radius: 12px; box-shadow: var(--glow), 0 10px 30px rgba(0,0,0,.5);
+  backdrop-filter: blur(8px); animation: selin .16s ease-out; }
+@keyframes selin { from { transform: translateY(-8px); opacity: 0; } }
+.selx { border: 0; background: none; color: var(--dim); font-size: 16px; padding: 2px 6px; border-radius: 6px; }
+.selx:hover { color: var(--text); background: var(--panel2); }
+.selcount { font-weight: 700; color: var(--cyan); }

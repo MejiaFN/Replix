@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('replix', {
   listClips: invoke('clips:list'),
   thumb: invoke('clips:thumb'),
   deleteClip: invoke('clips:delete'),
+  copyClips: invoke('clips:copyTo'),
   renameClip: invoke('clips:rename'),
   reveal: invoke('clips:reveal'),
   openFolder: invoke('clips:openFolder'),

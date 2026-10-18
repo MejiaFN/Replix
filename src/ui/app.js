@@ -64,19 +64,77 @@ async function loadClips() {
   renderGrid();
 }
 
+// ---------- selection ----------
+const selected = new Set(); // clip paths
+let visible = [], lastPicked = -1;
+
+function toggleSelect(c, e) {
+  const i = visible.indexOf(c);
+  if (e && e.shiftKey && lastPicked >= 0) {
+    // Shift-click selects everything between the last pick and this one.
+    const [a, b] = [Math.min(lastPicked, i), Math.max(lastPicked, i)];
+    visible.slice(a, b + 1).forEach((x) => selected.add(x.path));
+  } else if (selected.has(c.path)) selected.delete(c.path);
+  else selected.add(c.path);
+  lastPicked = i;
+  renderSelection();
+}
+
+function renderSelection() {
+  for (const p of [...selected]) if (!clips.some((c) => c.path === p)) selected.delete(p);
+  $$('#grid > .clip').forEach((el) => el.classList.toggle('selected', selected.has(el.dataset.path)));
+  $('#grid').classList.toggle('selecting', selected.size > 0);
+  $('#selbar').hidden = selected.size === 0;
+  const bytes = clips.filter((c) => selected.has(c.path)).reduce((n, c) => n + c.size, 0);
+  $('#selCount').textContent = `${selected.size} selected · ${fmtSize(bytes)}`;
+  $('#selAll').textContent = visible.length && visible.every((c) => selected.has(c.path)) ? 'Select none' : 'Select all';
+}
+
+function clearSelection() { selected.clear(); lastPicked = -1; renderSelection(); }
+
+$('#selClear').addEventListener('click', clearSelection);
+$('#selAll').addEventListener('click', () => {
+  if (visible.every((c) => selected.has(c.path))) visible.forEach((c) => selected.delete(c.path));
+  else visible.forEach((c) => selected.add(c.path));
+  renderSelection();
+});
+$('#selReveal').addEventListener('click', () => { const p = [...selected][0]; if (p) api.reveal(p); });
+$('#selCopy').addEventListener('click', async () => {
+  const n = await api.copyClips([...selected]);
+  if (n) { $('#selCount').textContent = `Copied ${n} file${n === 1 ? '' : 's'} ✓`; setTimeout(renderSelection, 1800); }
+});
+$('#selDelete').addEventListener('click', async () => {
+  const n = selected.size;
+  if (!confirm(`Move ${n} clip${n === 1 ? '' : 's'} to the Recycle Bin?`)) return;
+  for (const p of selected) await api.deleteClip(p);
+  selected.clear();
+  await loadClips();
+});
+document.addEventListener('keydown', (e) => {
+  if ($('#view-library').hidden || e.target.matches('input, select, textarea')) return;
+  if (e.key === 'Escape' && selected.size) clearSelection();
+  if (e.key === 'a' && e.ctrlKey) { e.preventDefault(); visible.forEach((c) => selected.add(c.path)); renderSelection(); }
+  if (e.key === 'Delete' && selected.size) $('#selDelete').click();
+});
+
 function renderGrid() {
   const q = $('#search').value.toLowerCase();
   const list = clips.filter((c) => (filter === 'all' || c.kind === filter) && c.name.toLowerCase().includes(q));
+  visible = list;
   const grid = $('#grid');
   grid.innerHTML = '';
   $('#empty').hidden = clips.length > 0;
   for (const c of list) {
     const el = document.createElement('div');
     el.className = 'clip';
-    el.innerHTML = `<div class="thumb"><span class="badge ${c.kind}">${c.kind === 'clip' ? 'CLIP' : 'REC'}</span><span class="dur"></span></div>
+    el.dataset.path = c.path;
+    el.innerHTML = `<div class="thumb"><span class="badge ${c.kind}">${c.kind === 'clip' ? 'CLIP' : 'REC'}</span>
+      <button class="sel" title="Select">✓</button><span class="dur"></span></div>
       <div class="meta"><div class="name"></div><div class="sub">${fmtDate(c.mtime)} · ${fmtSize(c.size)}</div></div>`;
     el.querySelector('.name').textContent = c.name.replace(/\.\w+$/, '');
-    el.addEventListener('click', () => openClip(c));
+    el.querySelector('.sel').addEventListener('click', (e) => { e.stopPropagation(); toggleSelect(c, e); });
+    // While anything is selected, clicking a card selects it instead of opening it.
+    el.addEventListener('click', (e) => (selected.size || e.ctrlKey ? toggleSelect(c, e) : openClip(c)));
     grid.appendChild(el);
     api.thumb(c.path).then((u) => { if (u) el.querySelector('.thumb').style.backgroundImage = `url("${u}")`; });
     // Read duration from metadata without decoding the whole file.
@@ -85,6 +143,7 @@ function renderGrid() {
     v.src = c.url;
     v.onloadedmetadata = () => { el.querySelector('.dur').textContent = fmtTime(v.duration); v.removeAttribute('src'); v.load(); };
   }
+  renderSelection();
 }
 $$('.tab').forEach((t) => t.addEventListener('click', () => {
   filter = t.dataset.filter;

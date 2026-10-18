@@ -262,6 +262,18 @@ function setupIpc() {
     try { fs.unlinkSync(path.join(thumbDir(), path.basename(p) + '.jpg')); } catch {}
     return dest;
   });
+  ipcMain.handle('clips:copyTo', async (_e, paths) => {
+    const r = await dialog.showOpenDialog(mainWin, { title: 'Copy clips to…', properties: ['openDirectory', 'createDirectory'] });
+    if (r.canceled) return 0;
+    let n = 0;
+    for (const p of paths.filter(inOutputDir)) {
+      let dest = path.join(r.filePaths[0], path.basename(p));
+      for (let i = 2; fs.existsSync(dest); i++) dest = path.join(r.filePaths[0], `${path.parse(p).name} (${i})${path.extname(p)}`);
+      await fs.promises.copyFile(p, dest);
+      n++;
+    }
+    return n;
+  });
   ipcMain.handle('clips:reveal', (_e, p) => shell.showItemInFolder(p));
   ipcMain.handle('clips:openFolder', () => shell.openPath(settings.outputDir));
   ipcMain.handle('clips:trim', async (_e, p, start, end) => {
