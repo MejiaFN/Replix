@@ -19,22 +19,28 @@
 <div class="t" id="t"><div class="dot" id="dot">✓</div><div><div class="title" id="title"></div><div class="body" id="body"></div></div></div>
 <script>
   const t = document.getElementById('t');
-  // Short two-note chime, generated so no audio file is needed.
+  // Alert sounds, generated so no audio files are needed. Each action has its own sound.
   let actx;
+  const SOUNDS = {
+    ok: [[880, 0, 'sine'], [1320, 0.09, 'sine']],          // clip saved: rising chime
+    err: [[440, 0, 'triangle'], [330, 0.12, 'triangle']],  // problem: falling tone
+    rec: [[660, 0, 'sine'], [660, 0.16, 'sine']],           // recording: double beep
+    shot: [[2400, 0, 'square', 0.035], [1600, 0.04, 'square', 0.04]], // screenshot: shutter click
+    mark: [[1175, 0, 'sine', 0.12]],                         // bookmark: single ping
+  };
   function chime(kind) {
     actx = actx || new AudioContext();
-    const notes = kind === 'err' ? [440, 330] : [880, 1320];
-    notes.forEach((f, i) => {
-      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + i * 0.09;
-      o.type = 'sine'; o.frequency.value = f;
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + 0.2);
-    });
+    for (const [f, delay, type, len = 0.18] of SOUNDS[kind] || SOUNDS.ok) {
+      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + delay;
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(type === 'square' ? 0.06 : 0.18, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + len + 0.02);
+    }
   }
   window.toastApi.onToast(({ title, body, kind, sound }) => {
     if (sound) chime(kind);
     t.className = 't ' + kind;
-    document.getElementById('dot').textContent = kind === 'err' ? '!' : kind === 'rec' ? '●' : '✓';
+    document.getElementById('dot').textContent = { err: '!', rec: '●', shot: '◉', mark: '★' }[kind] || '✓';
     document.getElementById('title').textContent = title;
     document.getElementById('body').textContent = body || '';
     requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));

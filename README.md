@@ -9,6 +9,12 @@ that moment is saved as a clip.
 - **Library**: browse, play, trim, rename and delete clips (deleted clips go to the Recycle Bin)
 - **Settings**: hotkeys, clip length, display, resolution, FPS, quality, encoder, game/system audio + mic, save folder
 - Runs from the tray, and closing the window keeps it clipping in the background
+- **Game detection**: clips are named and sorted by game (Albums → Games); can record only while gaming
+- **Screenshots** (F7) and **bookmarks** (F6) during long recordings
+- **Editor**: trim, per-track volume (game / mic), vertical 9:16 crop, GIF export, fit-to-size (10 MB for Discord)
+- **Share to Discord** via webhook; the clip link is copied to your clipboard
+- **Storage limits**: cap total size or auto-delete old clips (album clips are protected)
+- **Game-window capture**, distinct sound alerts, controller hotkeys (View + button)
 
 ## Download (for players)
 

@@ -82,11 +82,14 @@ class Recorder extends EventEmitter {
   videoInputArgs(s, display) {
     // Convert with the BT.709 matrix (what players assume for HD video) so colors match the screen,
     // and downscale with lanczos for a sharper picture.
-    const size = s.resolution === 'native' ? '' : `-2:${s.resolution}:`;
+    // Never upscale: a cropped game window smaller than the target keeps its own size.
+    const size = s.resolution === 'native' ? '' : `w=-2:h='min(ih,${s.resolution})':`;
     const scale = `,scale=${size}flags=lanczos:out_color_matrix=bt709:out_range=tv`;
     this.gpuPath = false;
     if (this.captureMode === 'ddagrab') {
-      const grab = `ddagrab=output_idx=${s.monitor}:framerate=${s.fps}:draw_mouse=${s.captureCursor === false ? 0 : 1}`;
+      let grab = `ddagrab=output_idx=${s.monitor}:framerate=${s.fps}:draw_mouse=${s.captureCursor === false ? 0 : 1}`;
+      // Game-window capture: crop to the window (coordinates relative to its monitor, physical pixels).
+      if (this.crop) grab += `:offset_x=${this.crop.x}:offset_y=${this.crop.y}:video_size=${this.crop.w}x${this.crop.h}`;
       // Zero-copy: at native size NVENC takes the captured GPU frames directly and does the
       // color conversion itself, so no frames are copied through the CPU (no dropped frames at 1440p+).
       if (s.resolution === 'native' && this.encoder.endsWith('_nvenc')) {
@@ -96,7 +99,9 @@ class Recorder extends EventEmitter {
       return { input: ['-f', 'lavfi', '-i', `${grab},hwdownload,format=bgra${scale},format=yuv420p`], vf: [] };
     }
     const args = ['-f', 'gdigrab', '-framerate', String(s.fps), '-draw_mouse', s.captureCursor === false ? '0' : '1'];
-    if (display) {
+    if (this.crop) {
+      args.push('-offset_x', String(this.crop.absX), '-offset_y', String(this.crop.absY), '-video_size', `${this.crop.w}x${this.crop.h}`);
+    } else if (display) {
       const b = display.bounds, f = display.scaleFactor || 1;
       args.push('-offset_x', String(Math.round(b.x * f)), '-offset_y', String(Math.round(b.y * f)),
         '-video_size', `${Math.round(b.width * f)}x${Math.round(b.height * f)}`);
@@ -297,7 +302,7 @@ class Recorder extends EventEmitter {
     if (this.wantRunning) { await this._kill(); this._clearBuffer(); await this._spawn(); }
   }
 
-  async saveClip(seconds) {
+  async saveClip(seconds, prefix = 'Replix') {
     const s = this.settings;
     if (!this.proc) throw new Error('Replay buffer is not running');
     seconds = seconds || s.bufferSeconds;
@@ -313,7 +318,7 @@ class Recorder extends EventEmitter {
     const id = stamp();
     const list = path.join(this.bufDir, `list-${id}.txt`);
     const joined = path.join(this.bufDir, `joined-${id}.ts`);
-    const out = path.join(s.outputDir, `Replix_Clip_${id}.mp4`);
+    const out = path.join(s.outputDir, `${prefix}_Clip_${id}.mp4`);
     fs.writeFileSync(list, pick.map((x) => `file '${fwd(x.p)}'`).join('\n'));
     try {
       await run(this.ffmpeg, ['-f', 'concat', '-safe', '0', '-i', list, '-map', '0', '-c', 'copy', joined]);
@@ -325,10 +330,10 @@ class Recorder extends EventEmitter {
     return out;
   }
 
-  async startRecording() {
+  async startRecording(prefix = 'Replix') {
     if (this.recordingFile) return;
     if (!this.wantRunning) throw new Error('Start capture first');
-    this.recordingFile = path.join(this.settings.outputDir, `Replix_Recording_${stamp()}.mkv`);
+    this.recordingFile = path.join(this.settings.outputDir, `${prefix}_Recording_${stamp()}.mkv`);
     this.recordingStarted = Date.now();
     this.emit('log', 'recording start');
     await this._spawn();
@@ -359,6 +364,58 @@ class Recorder extends EventEmitter {
       ...this.encoderArgs(this.settings, false), '-c:a', 'aac', '-b:a', `${this.settings.audioBitrate || 160}k`,
       '-movflags', '+faststart', out]);
     return out;
+  }
+
+  // Editor export. opts: { start, end, gameVol, micVol, crop: 'none'|'vertical', cropX (0..1),
+  // format: 'mp4'|'gif', targetMB (0 = no limit), tracks (number of audio tracks in the input) }
+  async exportClip(input, opts) {
+    const s = this.settings;
+    const dur = Math.max(0.5, opts.end - opts.start);
+    const tag = opts.format === 'gif' ? 'gif' : opts.targetMB ? `${opts.targetMB}MB` : opts.crop === 'vertical' ? 'vertical' : 'edit';
+    const out = input.replace(/(\.\w+)$/, `_${tag}_${stamp()}.${opts.format === 'gif' ? 'gif' : 'mp4'}`);
+    const vf = [];
+    if (opts.crop === 'vertical') {
+      // 9:16 window across the frame; cropX picks its horizontal position.
+      const x = Math.min(1, Math.max(0, opts.cropX ?? 0.5));
+      vf.push(`crop=trunc(ih*9/16/2)*2:ih:trunc((iw-ih*9/16)*${x.toFixed(3)}/2)*2:0`, 'scale=1080:1920:flags=lanczos');
+    }
+    const seek = ['-ss', String(opts.start), '-t', String(dur), '-i', input];
+
+    if (opts.format === 'gif') {
+      const g = [...vf, 'fps=15', `scale=${opts.crop === 'vertical' ? 360 : 640}:-2:flags=lanczos`].join(',');
+      await run(this.ffmpeg, [...seek, '-filter_complex', `[0:v]${g},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0', out]);
+      return out;
+    }
+
+    // Audio: with split tracks (Game+Mic, Game, Mic) remix Game and Mic at their own volumes.
+    const gv = opts.gameVol ?? 1, mv = opts.micVol ?? 1;
+    let af = [];
+    if (opts.tracks >= 3) af = ['-filter_complex', `[0:a:1]volume=${gv}[g];[0:a:2]volume=${mv}[m];[g][m]amix=inputs=2:normalize=0[aout]`, '-map', '[aout]'];
+    else if (opts.tracks >= 1) af = ['-filter_complex', `[0:a:0]volume=${gv}[aout]`, '-map', '[aout]'];
+    const audioKbps = opts.targetMB ? 128 : (s.audioBitrate || 192);
+
+    let video;
+    if (opts.targetMB) {
+      // Fit to size: spread the budget over the duration (5% headroom for container overhead).
+      const totalKbps = (opts.targetMB * 8192 * 0.95) / dur;
+      const vk = Math.max(150, Math.floor(totalKbps - (opts.tracks ? audioKbps : 0)));
+      if (vk < 1500) vf.push(`scale=-2:${vk < 700 ? 480 : 720}:flags=lanczos`);
+      video = ['-c:v', 'libx264', '-preset', 'medium', '-b:v', `${vk}k`, '-maxrate', `${vk}k`, '-bufsize', `${vk * 2}k`, '-pix_fmt', 'yuv420p'];
+    } else {
+      video = this.encoderArgs(s, false);
+    }
+    await run(this.ffmpeg, [...seek, '-map', '0:v:0', ...af, ...(vf.length ? ['-vf', vf.join(',')] : []), ...video,
+      ...(opts.tracks ? ['-c:a', 'aac', '-b:a', `${audioKbps}k`] : []), '-movflags', '+faststart', out]);
+    return out;
+  }
+
+  // Number of audio tracks in a file.
+  async audioTrackCount(input) {
+    return new Promise((resolve) => {
+      execFile(this.ffmpeg, ['-hide_banner', '-i', input], { windowsHide: true }, (_e, _o, err) => {
+        resolve(((err || '').match(/Stream #\d+:\d+.*?: Audio:/g) || []).length);
+      });
+    });
   }
 
   async thumbnail(input, out) {

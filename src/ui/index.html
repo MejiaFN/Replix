@@ -29,6 +29,11 @@
     <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
     <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4"/></symbol>
     <symbol id="i-hdd" viewBox="0 0 24 24"><path d="M22 12H2M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/><path d="M6 16h.01M10 16h.01"/></symbol>
+    <symbol id="i-game" viewBox="0 0 24 24"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-4 3.6L2 15a3 3 0 0 0 5.2 2.1L9 15h6l1.8 2.1A3 3 0 0 0 22 15l-.7-6.4A4 4 0 0 0 17.3 5z"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="4"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 21V4M4 4h13l-2 4 2 4H4"/></symbol>
+    <symbol id="i-pad" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M7 10v4M5 12h4M15.5 11h.01M18 13h.01"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></symbol>
   </defs>
 </svg>
@@ -36,6 +41,7 @@
 <header class="topbar">
   <div class="logo"><img src="icon.png" alt=""><span>REPLIX</span></div>
   <div class="chips">
+    <span class="chip static" id="gameChip" title="Detected game"><svg class="ic"><use href="#i-game"/></svg><span id="gameLabel">Waiting for game</span></span>
     <button class="chip" id="bufferChip" title="Turn the replay buffer on or off"><span class="dot" id="bufferDot"></span><span id="bufferLabel">Starting…</span></button>
     <button class="chip" id="clipChip" title="Save a clip now"><kbd id="clipKey">F8</kbd><span id="clipChipLabel">Clip 60s</span></button>
     <button class="chip" id="recChip" title="Start or stop recording"><kbd id="recKey">F9</kbd><span id="recLabel">Long recording</span></button>
@@ -103,7 +109,8 @@
           <button class="active" data-filter="all">All</button>
           <button data-filter="clip">Clips</button>
           <button data-filter="recording">Recordings</button>
-          <button data-filter="trim">Trimmed</button>
+          <button data-filter="trim">Edited</button>
+          <button data-filter="screenshot">Screenshots</button>
         </div>
         <div class="spacer"></div>
         <span class="count" id="itemCount">0 items</span>
@@ -145,9 +152,11 @@
         <div class="quick">
           <button class="qtile" data-quick="clip"><svg><use href="#i-scissors"/></svg>Clips</button>
           <button class="qtile" data-quick="recording"><svg><use href="#i-film"/></svg>Recordings</button>
-          <button class="qtile" data-quick="trim"><svg><use href="#i-sparkle"/></svg>Trimmed</button>
+          <button class="qtile" data-quick="screenshot"><svg><use href="#i-camera"/></svg>Screenshots</button>
           <button class="qtile" data-quick="today"><svg><use href="#i-play"/></svg>Today</button>
         </div>
+        <div class="sechead line" id="gamesHead"><h2>Games</h2><span class="count">Sorted automatically by the game you were playing</span></div>
+        <div class="agrid" id="gameGrid"></div>
         <div class="sechead line"><h2>My albums</h2><button class="btn ghost small" id="newAlbum"><svg class="ic"><use href="#i-plus"/></svg>Create album</button></div>
         <div class="agrid" id="albumGrid"></div>
         <div class="empty" id="albumsEmpty" hidden>
@@ -166,18 +175,20 @@
           <button class="tbtn" id="backBtn"><svg class="ic"><use href="#i-back"/></svg></button>
           <div class="pname" id="pname"></div>
           <div class="pactions">
+            <button class="btn ghost small" id="shareBtn"><svg class="ic"><use href="#i-share"/></svg>Share to Discord</button>
             <button class="btn ghost small" id="renameBtn">Rename</button>
             <button class="btn ghost small" id="revealBtn"><svg class="ic"><use href="#i-folder"/></svg>Show in folder</button>
             <button class="btn danger small" id="deleteBtn"><svg class="ic"><use href="#i-trash"/></svg>Delete</button>
           </div>
         </div>
-        <div class="videowrap"><video id="video" controls></video></div>
-        <div class="trim">
+        <div class="videowrap"><video id="video" controls></video><img id="imgView" alt="" hidden></div>
+        <div class="trim" id="trimPanel">
           <div class="trimbar" id="trimbar">
             <div class="trimsel" id="trimsel"></div>
             <div class="handle" id="hStart"></div>
             <div class="handle" id="hEnd"></div>
             <div class="playhead" id="playhead"></div>
+            <div class="marks" id="marks"></div>
           </div>
           <div class="trimrow">
             <span class="tlabel">Start <b id="tStart">0:00.0</b></span>
@@ -188,6 +199,24 @@
             <div class="spacer"></div>
             <button class="btn ghost small" id="previewTrim"><svg class="ic"><use href="#i-play"/></svg>Preview</button>
             <button class="btn primary small" id="saveTrim"><svg class="ic"><use href="#i-scissors"/></svg>Save trimmed copy</button>
+          </div>
+          <div class="export" id="exportBox">
+            <div class="exgroup" id="volGroup">
+              <label id="gameVolWrap">Game <span class="val" id="gameVolVal">100%</span><input type="range" id="gameVol" min="0" max="2" step="0.05" value="1"></label>
+              <label id="micVolWrap">Mic <span class="val" id="micVolVal">100%</span><input type="range" id="micVol" min="0" max="2" step="0.05" value="1"></label>
+            </div>
+            <div class="exgroup">
+              <label>Shape<select id="exCrop"><option value="none">Original</option><option value="vertical">Vertical 9:16 (TikTok, Shorts)</option></select></label>
+              <label id="cropPosWrap" hidden>Crop position<input type="range" id="exCropX" min="0" max="1" step="0.01" value="0.5"></label>
+            </div>
+            <div class="exgroup">
+              <label>Export as<select id="exFormat"><option value="mp4">MP4 video</option><option value="gif">GIF</option></select></label>
+              <label id="exSizeWrap">Size<select id="exSize"><option value="0">Best quality</option><option value="10">Fit in 10 MB (Discord)</option><option value="25">Fit in 25 MB</option><option value="50">Fit in 50 MB</option><option value="100">Fit in 100 MB</option></select></label>
+            </div>
+            <div class="spacer"></div>
+            <div class="exbtns">
+              <button class="btn primary small" id="exportBtn"><svg class="ic"><use href="#i-download"/></svg>Export selection</button>
+            </div>
           </div>
         </div>
       </div>
@@ -203,8 +232,11 @@
           <button class="sbtn" data-sec="recorder">Recorder</button>
           <button class="sbtn" data-sec="quality">Quality</button>
           <button class="sbtn" data-sec="audio">Audio</button>
+          <button class="sbtn" data-sec="games">Games</button>
+          <button class="sbtn" data-sec="controller">Controller</button>
           <div class="sublabel">Storage</div>
           <button class="sbtn" data-sec="storage">PC storage</button>
+          <button class="sbtn" data-sec="sharing">Sharing</button>
           <div class="sublabel">App</div>
           <button class="sbtn" data-sec="notifications">Notifications</button>
           <button class="sbtn" data-sec="general">Windows &amp; startup</button>
@@ -230,6 +262,10 @@
                 <div class="rc"><input class="hotkey" name="bufferHotkey" readonly></div></div>
               <div class="row"><div class="rl"><div class="rt"><span class="tag pink"></span>Mute / unmute mic</div><div class="rd">Stop your voice being recorded</div></div>
                 <div class="rc"><input class="hotkey" name="micMuteHotkey" readonly></div></div>
+              <div class="row"><div class="rl"><div class="rt"><span class="tag blue"></span>Screenshot</div><div class="rd">Save a full-quality picture of your game</div></div>
+                <div class="rc"><input class="hotkey" name="screenshotHotkey" readonly></div></div>
+              <div class="row"><div class="rl"><div class="rt"><span class="tag white"></span>Bookmark</div><div class="rd">Mark a moment in your long recording to find it later</div></div>
+                <div class="rc"><input class="hotkey" name="bookmarkHotkey" readonly></div></div>
               <p class="hint">Click a box and press the keys you want. Press Esc to turn that hotkey off.</p>
             </div>
           </section>
@@ -250,6 +286,8 @@
               <h3>Capture</h3>
               <div class="row"><div class="rl"><div class="rt">Display</div><div class="rd">The screen your games run on</div></div>
                 <div class="rc"><select name="monitor" id="monitorSel" data-num></select></div></div>
+              <div class="row"><div class="rl"><div class="rt">What to capture</div><div class="rd">"Game window only" leaves out your other screens and anything outside the game</div></div>
+                <div class="rc"><select name="captureTarget"><option value="display">Whole display</option><option value="window">Game window only</option></select></div></div>
               <div class="row"><div class="rl"><div class="rt">Show mouse cursor</div><div class="rd">Include the cursor in clips</div></div>
                 <div class="rc"><label class="switch"><input type="checkbox" name="captureCursor"><span></span></label></div></div>
             </div>
@@ -325,6 +363,40 @@
             </div>
           </section>
 
+          <!-- Games -->
+          <section class="sec" data-sec="games" hidden>
+            <div class="sechero"><svg><use href="#i-game"/></svg><h1>Games</h1><p>Replix notices when you're playing and names and sorts your clips by game.</p></div>
+            <div class="card">
+              <h3>Game detection</h3>
+              <div class="row"><div class="rl"><div class="rt">Detect games</div><div class="rd">Name clips after the game and group them in Albums → Games</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="gameDetection"><span></span></label></div></div>
+              <div class="row"><div class="rl"><div class="rt">Only record while gaming</div><div class="rd">Start the replay buffer when a game opens and stop it a minute after it closes, saving resources</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="gameOnlyBuffer"><span></span></label></div></div>
+              <div class="row"><div class="rl"><div class="rt">Right now</div><div class="rd" id="gameNow">—</div></div><div class="rc"></div></div>
+            </div>
+            <div class="card">
+              <h3>Add a game</h3>
+              <p class="hint">Replix knows popular games and anything you play fullscreen. If yours isn't detected, open it, come back here and add it.</p>
+              <div class="row"><div class="rl"><div class="rt">Last app you used</div><div class="rd" id="lastApp">—</div></div>
+                <div class="rc"><button type="button" class="btn ghost small" id="addGameBtn"><svg class="ic"><use href="#i-plus"/></svg>Add as a game</button></div></div>
+              <input type="hidden" name="customGames" data-json>
+              <div id="customList"></div>
+            </div>
+          </section>
+
+          <!-- Controller -->
+          <section class="sec" data-sec="controller" hidden>
+            <div class="sechero"><svg><use href="#i-pad"/></svg><h1>Controller</h1><p>Clip and record from an Xbox or other XInput controller.</p></div>
+            <div class="card">
+              <h3>Controller buttons</h3>
+              <div class="row"><div class="rl"><div class="rt"><span class="tag cyan"></span>Clip</div><div class="rd">Hold the buttons together</div></div>
+                <div class="rc"><select name="padClip" class="padsel"></select></div></div>
+              <div class="row"><div class="rl"><div class="rt"><span class="tag green"></span>Start / stop long recording</div></div>
+                <div class="rc"><select name="padRecord" class="padsel"></select></div></div>
+              <p class="hint">Uses the View (Back) button plus another button so normal gameplay doesn't trigger it. PlayStation controllers work through Steam Input or DS4Windows.</p>
+            </div>
+          </section>
+
           <!-- Storage -->
           <section class="sec" data-sec="storage" hidden>
             <div class="sechero"><svg><use href="#i-hdd"/></svg><h1>PC storage</h1><p>Where your clips are saved and how much space they use.</p></div>
@@ -333,6 +405,25 @@
               <div class="row"><div class="rl"><div class="rt">Save clips to</div><div class="rd" id="outDirText"></div></div>
                 <div class="rc"><input type="hidden" name="outputDir"><button type="button" class="btn ghost small" id="pickDir">Change…</button><button type="button" class="btn ghost small" id="openDir">Open</button></div></div>
               <div class="row"><div class="rl"><div class="rt">Space used</div><div class="rd" id="storageText"></div></div><div class="rc"></div></div>
+            </div>
+            <div class="card">
+              <h3>Automatic cleanup</h3>
+              <div class="row"><div class="rl"><div class="rt">Storage limit</div><div class="rd">When your clips go over this, the oldest ones are <b>permanently deleted</b></div></div>
+                <div class="rc"><select name="storageLimitGB" data-num><option value="0">No limit</option><option value="10">10 GB</option><option value="25">25 GB</option><option value="50">50 GB</option><option value="100">100 GB</option><option value="250">250 GB</option><option value="500">500 GB</option></select></div></div>
+              <div class="row"><div class="rl"><div class="rt">Delete old clips</div><div class="rd">Permanently delete clips older than this</div></div>
+                <div class="rc"><select name="deleteAfterDays" data-num><option value="0">Never</option><option value="7">After 1 week</option><option value="14">After 2 weeks</option><option value="30">After 30 days</option><option value="90">After 90 days</option><option value="365">After 1 year</option></select></div></div>
+              <div class="row"><div class="rl"><div class="rt">Protect album clips</div><div class="rd">Clips you've put in an album are never deleted automatically</div></div>
+                <div class="rc"><label class="switch"><input type="checkbox" name="protectAlbums"><span></span></label></div></div>
+            </div>
+          </section>
+
+          <!-- Sharing -->
+          <section class="sec" data-sec="sharing" hidden>
+            <div class="sechero"><svg><use href="#i-share"/></svg><h1>Sharing</h1><p>Send clips straight to a Discord channel and get a link to share anywhere.</p></div>
+            <div class="card">
+              <h3>Discord</h3>
+              <div class="row col"><div class="rl"><div class="rt">Webhook link</div><div class="rd">In Discord: <b>Server Settings → Integrations → Webhooks → New Webhook</b>, pick a channel, then <b>Copy Webhook URL</b> and paste it here. Clips over 10 MB are shrunk automatically.</div></div>
+                <input class="text" name="discordWebhook" placeholder="https://discord.com/api/webhooks/…" spellcheck="false"></div>
             </div>
           </section>
 

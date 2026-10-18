@@ -253,3 +253,33 @@ input[type=range] { accent-color: var(--cyan); width: 200px; }
 .mrow { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
 @media (max-width: 1100px) { .stats, .quick { grid-template-columns: repeat(2, 1fr); } .presets { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------- v1.6 additions ---------- */
+.chip.static { cursor: default; }
+.chip.static:hover { background: transparent; color: var(--dim); }
+.chip.playing { color: var(--green); }
+.chip.playing:hover { color: var(--green); }
+.tag.blue { background: #3b82f6; } .tag.white { background: #e5e7eb; }
+.card input.text { width: 100%; height: 38px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--line2); background: #0a0a0e; padding: 0 12px; outline: none; font-family: Consolas, monospace; font-size: 12px; }
+.card input.text:focus { border-color: var(--cyan); }
+.row.col { flex-direction: column; align-items: stretch; gap: 0; }
+.cg { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.cg b { flex: 1; }
+.cg span { color: var(--dim); font-family: Consolas, monospace; font-size: 12px; }
+.cg button { border: 0; background: none; color: var(--dim); font-size: 15px; padding: 2px 8px; border-radius: 6px; }
+.cg button:hover { color: var(--pink); background: var(--surface3); }
+.album.game .cover { position: relative; }
+.album.game .cover::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.6), transparent 60%); }
+/* player extras */
+.videowrap { position: relative; }
+#imgView { max-width: 100%; max-height: 100%; object-fit: contain; }
+.cropbox { position: absolute; border: 2px solid var(--cyan); box-shadow: 0 0 0 9999px rgba(0,0,0,.55); pointer-events: none; border-radius: 4px; }
+.marks { position: absolute; inset: 0; pointer-events: none; }
+.mark { position: absolute; top: -10px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.6); pointer-events: auto; cursor: pointer; }
+.mark:hover { background: var(--cyan); }
+.export { display: flex; align-items: flex-end; gap: 22px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.exgroup { display: flex; gap: 14px; }
+.exgroup label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--dim); }
+.exgroup input[type=range] { width: 130px; }
+.exgroup select { height: 30px; border-radius: 8px; border: 1px solid var(--line2); background: #0a0a0e; padding: 0 8px; outline: none; color: var(--text); }
+.exbtns { display: flex; gap: 8px; }

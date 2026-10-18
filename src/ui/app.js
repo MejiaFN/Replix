@@ -19,8 +19,10 @@ const fmtAgo = (ms) => {
   if (s < 7 * 86400) return new Date(ms).toLocaleDateString(undefined, { weekday: 'long' });
   return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
-const kindOf = (c) => (c.name.includes('_trim_') ? 'trim' : c.kind);
-const KIND_LABEL = { clip: 'CLIP', recording: 'REC', trim: 'TRIM' };
+// Exports and trims are "edited"; screenshots and GIFs keep their own kind.
+const kindOf = (c) => (c.kind === 'screenshot' ? 'screenshot' : /_(trim|edit|vertical|gif|\d+MB)_/.test(c.name) ? 'trim' : c.kind);
+const KIND_LABEL = { clip: 'CLIP', recording: 'REC', trim: 'EDIT', screenshot: 'SHOT', gif: 'GIF' };
+const isImage = (c) => c.kind === 'screenshot' || c.kind === 'gif';
 const baseName = (p) => p.split(/[\\/]/).pop();
 const isToday = (ms) => new Date(ms).toDateString() === new Date().toDateString();
 
@@ -53,6 +55,10 @@ function renderStatus() {
   $('#recKey').textContent = settings.recordHotkey || '—';
   $('#recChip').classList.toggle('rec', rec);
   $('#emptyKey').textContent = settings.clipHotkey || '—';
+  $('#gameChip').hidden = settings.gameDetection === false;
+  $('#gameChip').classList.toggle('playing', !!status.game);
+  $('#gameLabel').textContent = status.game || 'Waiting for game';
+  $('#gameNow').textContent = status.game ? `Playing ${status.game}` : 'No game detected';
 
   const hero = $('#hero');
   hero.className = 'hero' + (rec ? ' rec' : on ? '' : ' off');
@@ -99,15 +105,17 @@ function makeCard(c, { selectable = true } = {}) {
   el.innerHTML = `<div class="thumb"><span class="badge k-${k}">${KIND_LABEL[k]}</span>
       ${selectable ? '<button class="sel" title="Select">✓</button>' : ''}
       <span class="play"><svg><use href="#i-play"/></svg></span><span class="dur"></span></div>
-    <div class="meta"><div class="name"></div><div class="sub"><span>${fmtAgo(c.mtime)}</span><i></i><span>${fmtSize(c.size)}</span></div></div>`;
-  $('.name', el).textContent = c.name.replace(/\.\w+$/, '').replace(/^Replix_/, '').replace(/_/g, ' ');
+    <div class="meta"><div class="name"></div><div class="sub">${c.game ? '<span class="g"></span><i></i>' : ''}<span>${fmtAgo(c.mtime)}</span><i></i><span>${fmtSize(c.size)}</span></div></div>`;
+  $('.name', el).textContent = displayName(c);
+  if (c.game) $('.g', el).textContent = c.game;
   el.title = c.name;
   const thumb = $('.thumb', el);
   const setThumb = (u) => { if (u) thumb.style.backgroundImage = `url("${u}")`; };
   if (thumbCache.has(c.path + c.mtime)) setThumb(thumbCache.get(c.path + c.mtime));
   else api.thumb(c.path).then((u) => { thumbCache.set(c.path + c.mtime, u); setThumb(u); });
   const durEl = $('.dur', el);
-  if (durCache.has(c.path + c.mtime)) durEl.textContent = durCache.get(c.path + c.mtime);
+  if (isImage(c)) { durEl.remove(); if (c.kind === 'screenshot') $('.play', el).remove(); }
+  else if (durCache.has(c.path + c.mtime)) durEl.textContent = durCache.get(c.path + c.mtime);
   else {
     // Read the duration from metadata without decoding the file.
     const v = document.createElement('video');
@@ -121,6 +129,13 @@ function makeCard(c, { selectable = true } = {}) {
     el.addEventListener('click', (e) => (selected.size || e.ctrlKey ? toggleSelect(c, e) : openClip(c)));
   } else el.addEventListener('click', () => openClip(c));
   return el;
+}
+
+// "Fortnite_Clip_2026-10-17_18-55-02.mp4" -> "Clip 2026-10-17 18-55-02" (the game is shown separately)
+function displayName(c) {
+  let n = c.name.replace(/\.\w+$/, '');
+  if (c.game) n = n.slice(c.game.length + 1);
+  return n.replace(/^Replix_/, '').replace(/_/g, ' ');
 }
 
 async function loadClips() {
@@ -158,7 +173,7 @@ function renderStorage() {
 let ctx = { album: null, quick: null }, filter = 'all';
 
 function openClips(next) {
-  ctx = { album: next.album || null, quick: next.quick || null };
+  ctx = { album: next.album || null, quick: next.quick || null, game: next.game || null };
   filter = next.filter || 'all';
   $$('#filterSeg button').forEach((b) => b.classList.toggle('active', b.dataset.filter === filter));
   clearSelection();
@@ -174,6 +189,7 @@ function visibleClips() {
   let list = clips.filter((c) => (filter === 'all' || kindOf(c) === filter) && c.name.toLowerCase().includes(q));
   if (al) list = list.filter((c) => al.clips.includes(baseName(c.path)));
   if (ctx.quick === 'today') list = list.filter((c) => isToday(c.mtime));
+  if (ctx.game) list = list.filter((c) => c.game === ctx.game);
   const sort = $('#sortSel').value;
   const cmp = { new: (a, b) => b.mtime - a.mtime, old: (a, b) => a.mtime - b.mtime, big: (a, b) => b.size - a.size, name: (a, b) => a.name.localeCompare(b.name) }[sort];
   return list.sort(cmp);
@@ -183,8 +199,8 @@ let visible = [];
 function renderClips() {
   const al = currentAlbum();
   if (ctx.album && !al) ctx.album = null;
-  $('#clipsTitle').textContent = al ? al.name : ctx.quick === 'today' ? 'Today' : 'Clips';
-  $('#albumBack').hidden = !al && !ctx.quick;
+  $('#clipsTitle').textContent = al ? al.name : ctx.game || (ctx.quick === 'today' ? 'Today' : 'Clips');
+  $('#albumBack').hidden = !al && !ctx.quick && !ctx.game;
   $('#selRemove').hidden = !al;
   visible = visibleClips();
   const g = $('#grid');
@@ -320,7 +336,26 @@ $$('[data-quick]').forEach((b) => b.addEventListener('click', () => {
   openClips(q === 'today' ? { quick: 'today' } : { filter: q });
 }));
 
+function renderGames() {
+  const groups = new Map();
+  for (const c of clips) if (c.game) { if (!groups.has(c.game)) groups.set(c.game, []); groups.get(c.game).push(c); }
+  const g = $('#gameGrid');
+  g.innerHTML = '';
+  $('#gamesHead').hidden = g.hidden = groups.size === 0;
+  for (const [game, items] of [...groups].sort((a, b) => b[1][0].mtime - a[1][0].mtime)) {
+    const el = document.createElement('div');
+    el.className = 'album game';
+    el.innerHTML = `<div class="cover"><svg><use href="#i-game"/></svg></div><div class="ameta"><b></b><span>${items.length} item${items.length === 1 ? '' : 's'} · ${fmtSize(items.reduce((n, c) => n + c.size, 0))}</span></div>`;
+    $('b', el).textContent = game;
+    const cover = items.find((c) => c.kind !== 'gif') || items[0];
+    api.thumb(cover.path).then((u) => { if (u) { const cv = $('.cover', el); cv.style.backgroundImage = `url("${u}")`; $('svg', cv).remove(); } });
+    el.addEventListener('click', () => openClips({ game }));
+    g.appendChild(el);
+  }
+}
+
 function renderAlbums() {
+  renderGames();
   const g = $('#albumGrid');
   g.innerHTML = '';
   $('#albumsEmpty').hidden = albums.albums.length > 0;
@@ -385,13 +420,92 @@ function prompt2(title, okText, value = '') {
 const video = $('#video');
 let playing = null, trimStart = 0, trimEnd = 0, previewing = false;
 
-function openClip(c) {
+let tracks = 0, marks = [];
+async function openClip(c) {
   playing = c;
   $('#pname').textContent = c.name;
+  const img = isImage(c);
+  $('#imgView').hidden = !img;
+  video.hidden = img;
+  $('#trimPanel').hidden = img;
+  $('#marks').innerHTML = '';
+  $('#cropbox')?.remove();
+  if (img) { $('#imgView').src = c.url + '?v=' + c.mtime; video.removeAttribute('src'); show('player'); return; }
   video.src = c.url;
   show('player');
-  video.onloadedmetadata = () => { trimStart = 0; trimEnd = video.duration; renderTrim(); video.play(); };
+  video.onloadedmetadata = () => { trimStart = 0; trimEnd = video.duration; renderTrim(); renderMarks(); video.play(); };
+  [tracks, { bookmarks: marks = [] }] = await Promise.all([api.clipTracks(c.path), api.getMeta(c.name)]);
+  $('#volGroup').hidden = tracks === 0;
+  $('#micVolWrap').hidden = tracks < 3;
+  $('#gameVolWrap').firstChild.textContent = tracks >= 3 ? 'Game ' : 'Volume ';
+  renderMarks();
+  updateExportUi();
 }
+
+function renderMarks() {
+  const box = $('#marks');
+  box.innerHTML = '';
+  if (!video.duration) return;
+  for (const t of marks) {
+    const m = document.createElement('div');
+    m.className = 'mark';
+    m.style.left = (t / video.duration) * 100 + '%';
+    m.title = `Bookmark at ${fmtTime(t)}`;
+    m.addEventListener('mousedown', (e) => { e.stopPropagation(); video.currentTime = t; });
+    box.appendChild(m);
+  }
+}
+
+// Export panel
+function updateExportUi() {
+  const gif = $('#exFormat').value === 'gif';
+  $('#exSizeWrap').hidden = gif;
+  $('#volGroup').hidden = gif || tracks === 0;
+  $('#cropPosWrap').hidden = $('#exCrop').value !== 'vertical';
+  $('#gameVolVal').textContent = Math.round($('#gameVol').value * 100) + '%';
+  $('#micVolVal').textContent = Math.round($('#micVol').value * 100) + '%';
+  drawCropBox();
+}
+function drawCropBox() {
+  $('#cropbox')?.remove();
+  if ($('#exCrop').value !== 'vertical' || !video.videoWidth) return;
+  // Where the video is actually drawn inside the element (letterboxed).
+  const r = video.getBoundingClientRect(), wrap = $('.videowrap').getBoundingClientRect();
+  const scale = Math.min(r.width / video.videoWidth, r.height / video.videoHeight);
+  const vw = video.videoWidth * scale, vh = video.videoHeight * scale;
+  const vx = r.left - wrap.left + (r.width - vw) / 2, vy = r.top - wrap.top + (r.height - vh) / 2;
+  const cw = vh * 9 / 16, x = vx + (vw - cw) * Number($('#exCropX').value);
+  const b = document.createElement('div');
+  b.className = 'cropbox'; b.id = 'cropbox';
+  Object.assign(b.style, { left: x + 'px', top: vy + 'px', width: cw + 'px', height: vh + 'px' });
+  $('.videowrap').appendChild(b);
+}
+['#exFormat', '#exCrop', '#exCropX', '#gameVol', '#micVol'].forEach((sel) => $(sel).addEventListener('input', updateExportUi));
+addEventListener('resize', drawCropBox);
+$('#exportBtn').addEventListener('click', async () => {
+  const btn = $('#exportBtn'), label = btn.lastChild;
+  btn.disabled = true; label.textContent = 'Exporting…';
+  try {
+    await api.exportClip(playing.path, {
+      start: trimStart, end: trimEnd, format: $('#exFormat').value, targetMB: Number($('#exSize').value),
+      crop: $('#exCrop').value, cropX: Number($('#exCropX').value), gameVol: Number($('#gameVol').value), micVol: Number($('#micVol').value),
+    });
+    label.textContent = 'Saved to library ✓';
+  } catch (e) { alert('Export failed: ' + e.message); }
+  setTimeout(() => { btn.disabled = false; label.textContent = 'Export selection'; }, 1800);
+});
+$('#shareBtn').addEventListener('click', async () => {
+  const btn = $('#shareBtn'), label = btn.lastChild;
+  btn.disabled = true; label.textContent = 'Uploading…';
+  try {
+    const r = await api.shareDiscord(playing.path);
+    label.textContent = r && r.url ? 'Link copied ✓' : 'Shared ✓';
+  } catch (e) {
+    label.textContent = 'Share to Discord';
+    alert(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+  }
+  setTimeout(() => { btn.disabled = false; label.textContent = 'Share to Discord'; }, 2500);
+});
 function closePlayer() { video.removeAttribute('src'); video.load(); show(prevView); }
 
 function renderTrim() {
@@ -501,6 +615,7 @@ function readForm() {
     if (!el.name) continue;
     if (el.type === 'checkbox') next[el.name] = el.checked;
     else if ('num' in el.dataset) next[el.name] = Number(el.value);
+    else if ('json' in el.dataset) next[el.name] = JSON.parse(el.value || '[]');
     else next[el.name] = el.value;
   }
   return next;
@@ -509,9 +624,11 @@ function fillSettings() {
   for (const el of form.elements) {
     if (!el.name || !(el.name in settings)) continue;
     if (el.type === 'checkbox') el.checked = !!settings[el.name];
+    else if ('json' in el.dataset) el.value = JSON.stringify(settings[el.name] || []);
     else el.value = settings[el.name];
   }
   $('#outDirText').textContent = settings.outputDir;
+  renderCustomGames();
   savedSnapshot = JSON.stringify(readForm());
   updateLabels();
   renderMic();
@@ -557,6 +674,47 @@ $$('.preset').forEach((b) => b.addEventListener('click', () => {
   updateLabels();
 }));
 $('#revertBtn').addEventListener('click', fillSettings);
+
+// Controller combos (View/Back + a button)
+const PAD_COMBOS = [['', 'Off'], ['back+a', 'View + A'], ['back+b', 'View + B'], ['back+x', 'View + X'], ['back+y', 'View + Y'],
+  ['back+rb', 'View + RB'], ['back+lb', 'View + LB'], ['back+rs', 'View + Right stick click'], ['back+start', 'View + Menu']];
+$$('.padsel').forEach((sel) => { sel.innerHTML = PAD_COMBOS.map(([v, l]) => `<option value="${v}">${l}</option>`).join(''); });
+
+// Custom games
+function renderCustomGames() {
+  const list = JSON.parse(form.elements.customGames.value || '[]');
+  const box = $('#customList');
+  box.innerHTML = '';
+  for (const g of list) {
+    const row = document.createElement('div');
+    row.className = 'cg';
+    row.innerHTML = '<svg class="ic"><use href="#i-game"/></svg><b></b><span></span><button type="button" title="Remove">✕</button>';
+    $('b', row).textContent = g.name;
+    $('span', row).textContent = g.exe + '.exe';
+    $('button', row).addEventListener('click', () => {
+      form.elements.customGames.value = JSON.stringify(list.filter((x) => x !== g));
+      renderCustomGames(); updateLabels();
+    });
+    box.appendChild(row);
+  }
+}
+let lastApp = null;
+async function refreshLastApp() {
+  const r = await api.currentGame();
+  lastApp = r.fg;
+  $('#lastApp').textContent = lastApp && lastApp.exe ? `${lastApp.title || lastApp.exe} (${lastApp.exe}.exe)` : 'None yet';
+}
+setInterval(() => { if (current === 'settings' && !$('.sec[data-sec="games"]').hidden) refreshLastApp(); }, 2000);
+$('#addGameBtn').addEventListener('click', async () => {
+  await refreshLastApp();
+  if (!lastApp || !lastApp.exe || /^(replix|electron)$/i.test(lastApp.exe)) return alert('Open your game first, then come back and click this.');
+  const name = await prompt2('Game name', 'Add', (lastApp.title || lastApp.exe).replace(/\s+[-–|]\s+.*$/, '').slice(0, 40));
+  if (!name) return;
+  const list = JSON.parse(form.elements.customGames.value || '[]').filter((g) => g.exe.toLowerCase() !== lastApp.exe.toLowerCase());
+  list.push({ name, exe: lastApp.exe });
+  form.elements.customGames.value = JSON.stringify(list);
+  renderCustomGames(); updateLabels();
+});
 
 async function loadMics() {
   try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach((t) => t.stop()); } catch {}
@@ -606,7 +764,7 @@ $('#openDir').addEventListener('click', () => api.openFolder());
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const next = readForm();
-  const keys = ['clipHotkey', 'shortClipHotkey', 'recordHotkey', 'bufferHotkey', 'micMuteHotkey'].map((k) => next[k]).filter(Boolean);
+  const keys = ['clipHotkey', 'shortClipHotkey', 'recordHotkey', 'bufferHotkey', 'micMuteHotkey', 'screenshotHotkey', 'bookmarkHotkey'].map((k) => next[k]).filter(Boolean);
   const dup = keys.find((k, i) => keys.indexOf(k) !== i);
   if (dup) { $('#saveMsg').textContent = `⚠ ${dup} is used for two actions`; return; }
   const r = await api.saveSettings(next);

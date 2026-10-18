@@ -5,6 +5,9 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const settingsStore = require('./settings');
 const { Recorder } = require('./recorder');
+const { Watcher, comboMask } = require('./watcher');
+const { detectGame, fileSafe } = require('./games');
+const { clipboard } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 const ffmpegPath = require('ffmpeg-static').replace('app.asar', 'app.asar.unpacked');
@@ -12,7 +15,7 @@ const ICON = path.join(__dirname, 'ui', 'icon.png');
 
 if (!app.requestSingleInstanceLock()) app.quit();
 
-let settings, recorder, mainWin, audioWin, toastWin, tray;
+let settings, recorder, mainWin, audioWin, toastWin, tray, watcher;
 let quitting = false;
 let micMuted = false;
 const launchedHidden = process.argv.includes('--hidden');
@@ -25,7 +28,8 @@ const log = (...a) => {
 };
 
 function display() {
-  return screen.getAllDisplays()[settings.monitor] || screen.getPrimaryDisplay();
+  const mon = recorder && recorder.monitorOverride != null ? recorder.monitorOverride : settings.monitor;
+  return screen.getAllDisplays()[mon] || screen.getPrimaryDisplay();
 }
 
 function send(ch, data) {
@@ -33,7 +37,7 @@ function send(ch, data) {
 }
 
 function pushStatus() {
-  send('status', recorder.status);
+  send('status', { ...recorder.status, game: currentGame && currentGame.name });
   updateTray();
 }
 
@@ -61,7 +65,9 @@ function createAudio() {
 }
 
 function toast(title, body, kind = 'ok') {
-  if (settings.showNotifications === false && kind !== 'err') return;
+  // With popups off, the toast window still plays the alert sound, it just stays hidden.
+  const popup = settings.showNotifications !== false || kind === 'err';
+  if (!popup && settings.clipSound === false) return;
   const d = screen.getPrimaryDisplay().workArea;
   if (!toastWin || toastWin.isDestroyed()) {
     toastWin = new BrowserWindow({
@@ -76,6 +82,7 @@ function toast(title, body, kind = 'ok') {
     return;
   }
   toastWin.webContents.send('toast', { title, body, kind, sound: settings.clipSound !== false });
+  if (!popup) return;
   toastWin.showInactive();
   clearTimeout(toast.t);
   toast.t = setTimeout(() => toastWin && !toastWin.isDestroyed() && toastWin.hide(), 2800);
@@ -104,9 +111,87 @@ function audioConfig() {
     inputs: recorder.audioInputs(settings) };
 }
 
+// ---------- games ----------
+// currentGame: { name, pid, fg } while a game is running; lastGame keeps the name for a while after.
+let currentGame = null, lastGame = null, lastGameAt = 0, lastFg = null, gameGoneTimer = null;
+
+function gamePrefix() {
+  const name = currentGame ? currentGame.name : Date.now() - lastGameAt < 2 * 60 * 1000 ? lastGame : null;
+  return name ? fileSafe(name) : 'Replix';
+}
+
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+
+function onForeground(fg) {
+  // Remember the last app that isn't Replix itself (for "Add as a game").
+  if (fg.exe && !/^(replix|electron)$/i.test(fg.exe)) lastFg = fg;
+  if (settings.gameDetection === false) return;
+  const name = detectGame(fg, settings.customGames || []);
+  if (name && (!currentGame || currentGame.pid !== fg.pid)) {
+    const switched = !currentGame || currentGame.name !== name;
+    currentGame = { name, pid: fg.pid, fg };
+    lastGame = name; lastGameAt = Date.now();
+    clearTimeout(gameGoneTimer); gameGoneTimer = null;
+    log('game detected:', name, fg.exe);
+    if (switched) toast(`${name} detected`, recorder.wantRunning ? `Press ${settings.clipHotkey} to clip` : 'Replay buffer starting…', 'ok', true);
+    if (settings.gameOnlyBuffer && !recorder.wantRunning) startCapture().catch(() => {}).then(pushStatus);
+    else if (settings.captureTarget === 'window') applyCrop(true);
+    pushStatus();
+  } else if (currentGame && currentGame.pid === fg.pid) {
+    currentGame.fg = fg; // window moved/resized
+    lastGameAt = Date.now();
+  }
+}
+
+// Every few seconds: notice when the game process has exited.
+setInterval(() => {
+  if (!currentGame) return;
+  if (alive(currentGame.pid)) { lastGameAt = Date.now(); return; }
+  log('game closed:', currentGame.name);
+  currentGame = null;
+  pushStatus();
+  if (settings.gameOnlyBuffer && recorder.wantRunning && !recorder.status.recording && !gameGoneTimer) {
+    // Keep the buffer a little longer so a clip right after closing still works.
+    gameGoneTimer = setTimeout(() => { gameGoneTimer = null; if (!currentGame && !recorder.status.recording) stopCapture().then(pushStatus); }, 60 * 1000);
+  }
+  if (settings.captureTarget === 'window') applyCrop(true);
+}, 3000);
+
+// Game-window capture: crop the capture to the game's window when it isn't fullscreen.
+function cropFor() {
+  if (settings.captureTarget !== 'window' || !currentGame || !currentGame.fg) return { crop: null, monitor: settings.monitor };
+  const fg = currentGame.fg;
+  const displays = screen.getAllDisplays();
+  const idx = displays.findIndex((d) => Math.round(d.bounds.x * d.scaleFactor) === fg.mx && Math.round(d.bounds.y * d.scaleFactor) === fg.my);
+  const monitor = idx >= 0 ? idx : settings.monitor;
+  if (fg.full) return { crop: null, monitor };
+  const x = Math.max(0, fg.x - fg.mx), y = Math.max(0, fg.y - fg.my);
+  const w = Math.min(fg.w, fg.mw - x) & ~1, h = Math.min(fg.h, fg.mh - y) & ~1;
+  if (w < 320 || h < 240) return { crop: null, monitor };
+  return { crop: { x, y, w, h, absX: fg.mx + x, absY: fg.my + y }, monitor };
+}
+
+let lastCropKey = '';
+async function applyCrop(restartIfChanged) {
+  const { crop, monitor } = cropFor();
+  recorder.crop = crop;
+  recorder.monitorOverride = monitor;
+  const key = JSON.stringify([crop, monitor]);
+  if (restartIfChanged && key !== lastCropKey && recorder.wantRunning && !recorder.status.recording) {
+    lastCropKey = key;
+    await recorder.restart(captureSettings(), display());
+  }
+  lastCropKey = key;
+}
+
+function captureSettings() {
+  return recorder.monitorOverride != null ? { ...settings, monitor: recorder.monitorOverride } : settings;
+}
+
 async function startCapture() {
   audioWin.webContents.send('audio:config', audioConfig());
-  await recorder.start(settings, display());
+  await applyCrop(false);
+  await recorder.start(captureSettings(), display());
 }
 
 async function stopCapture() {
@@ -125,9 +210,10 @@ async function saveClip(seconds) {
   if (saving) return;
   saving = true;
   try {
-    const out = await recorder.saveClip(seconds);
+    const out = await recorder.saveClip(seconds, gamePrefix());
     toast('Clip saved', path.basename(out));
     send('clips:changed');
+    cleanupStorage();
   } catch (e) {
     toast('Could not save clip', e.message.split('\n')[0], 'err');
     log(e.message);
@@ -138,12 +224,17 @@ async function toggleRecord() {
   try {
     if (recorder.status.recording) {
       toast('Saving recording…', 'Finishing file', 'rec');
+      const marks = bookmarks;
+      bookmarks = [];
       const out = await recorder.stopRecording();
-      toast('Recording saved', path.basename(out));
+      if (marks.length) setMeta(path.basename(out), { bookmarks: marks });
+      toast('Recording saved', marks.length ? `${path.basename(out)} · ${marks.length} bookmark${marks.length === 1 ? '' : 's'}` : path.basename(out), 'ok');
       send('clips:changed');
+      cleanupStorage();
     } else {
       if (!recorder.wantRunning) await startCapture();
-      await recorder.startRecording();
+      bookmarks = [];
+      await recorder.startRecording(gamePrefix());
       toast('Recording started', `Press ${settings.recordHotkey} to stop`, 'rec');
     }
   } catch (e) { toast('Recording error', e.message.split('\n')[0], 'err'); }
@@ -155,6 +246,41 @@ function toggleMicMute() {
   audioWin.webContents.send('audio:micMute', micMuted);
   toast(micMuted ? 'Mic muted' : 'Mic unmuted', micMuted ? 'Your voice is not being recorded' : 'Your voice is being recorded', micMuted ? 'err' : 'ok');
   send('micMuted', micMuted);
+}
+
+// ---------- screenshots + bookmarks ----------
+let bookmarks = [];
+function addBookmark() {
+  if (!recorder.status.recording) return toast('No recording running', 'Bookmarks mark moments in a long recording', 'err');
+  const t = Math.max(0, (Date.now() - recorder.recordingStarted) / 1000 - 1);
+  bookmarks.push(Math.round(t * 10) / 10);
+  toast('Bookmark added', `at ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`, 'mark');
+}
+
+async function takeScreenshot() {
+  try {
+    const { crop, monitor } = cropFor();
+    const d = screen.getAllDisplays()[monitor] || screen.getPrimaryDisplay();
+    const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
+    const src = sources.find((x) => String(x.display_id) === String(d.id)) || sources[0];
+    let img = src.thumbnail;
+    if (crop) img = img.crop({ x: crop.x, y: crop.y, width: crop.w, height: crop.h });
+    const d2 = new Date(), pad = (n) => String(n).padStart(2, '0');
+    const name = `${gamePrefix()}_Screenshot_${d2.getFullYear()}-${pad(d2.getMonth() + 1)}-${pad(d2.getDate())}_${pad(d2.getHours())}-${pad(d2.getMinutes())}-${pad(d2.getSeconds())}.png`;
+    fs.writeFileSync(path.join(settings.outputDir, name), img.toPNG());
+    toast('Screenshot saved', name, 'shot');
+    send('clips:changed');
+  } catch (e) { toast('Screenshot failed', e.message, 'err'); }
+}
+
+// ---------- controller ----------
+let lastPad = 0;
+function onPad(b) {
+  const hit = (combo) => { const m = comboMask(combo); return m && (b & m) === m && (lastPad & m) !== m; };
+  if (hit(settings.padClip)) saveClip();
+  if (hit(settings.padRecord)) toggleRecord();
+  lastPad = b;
 }
 
 function registerHotkeys() {
@@ -169,6 +295,8 @@ function registerHotkeys() {
   bind(settings.recordHotkey, toggleRecord);
   bind(settings.bufferHotkey, toggleBuffer);
   bind(settings.micMuteHotkey, toggleMicMute);
+  bind(settings.screenshotHotkey, takeScreenshot);
+  bind(settings.bookmarkHotkey, addBookmark);
   return failed;
 }
 
@@ -178,7 +306,7 @@ function applyStartup() {
 }
 
 // ---------- clips ----------
-const VIDEO_EXT = /\.(mp4|mkv|mov|webm)$/i;
+const VIDEO_EXT = /\.(mp4|mkv|mov|webm|gif|png)$/i;
 const thumbDir = () => path.join(settings.outputDir, '.thumbs');
 
 function listClips() {
@@ -187,8 +315,10 @@ function listClips() {
   return fs.readdirSync(dir).filter((f) => VIDEO_EXT.test(f)).map((f) => {
     const p = path.join(dir, f);
     const st = fs.statSync(p);
+    const m = /^(.+?)_(Clip|Recording|Screenshot)_/.exec(f);
     return { path: p, url: pathToFileURL(p).href, name: f, size: st.size, mtime: st.mtimeMs,
-      kind: f.includes('_Recording_') ? 'recording' : 'clip' };
+      game: m && m[1] !== 'Replix' ? m[1] : null,
+      kind: /\.png$/i.test(f) ? 'screenshot' : /\.gif$/i.test(f) ? 'gif' : f.includes('_Recording_') ? 'recording' : 'clip' };
   }).sort((a, b) => b.mtime - a.mtime);
 }
 
@@ -205,9 +335,69 @@ function renameInAlbums(from, to) {
   saveAlbums(a);
 }
 
+// Per-file extras (bookmarks) keyed by file name, in userData/meta.json.
+const metaFile = () => path.join(app.getPath('userData'), 'meta.json');
+function loadMeta() { try { return JSON.parse(fs.readFileSync(metaFile(), 'utf8')); } catch { return {}; } }
+function setMeta(name, data) { const m = loadMeta(); m[name] = { ...(m[name] || {}), ...data }; fs.writeFileSync(metaFile(), JSON.stringify(m)); }
+
+// Storage limits: delete the oldest files first (never ones in an album, if protected).
+function cleanupStorage() {
+  const limit = (Number(settings.storageLimitGB) || 0) * (1 << 30);
+  const days = Number(settings.deleteAfterDays) || 0;
+  if (!limit && !days) return;
+  const protectedNames = new Set(settings.protectAlbums === false ? [] : loadAlbums().albums.flatMap((a) => a.clips));
+  const files = listClips().filter((c) => !protectedNames.has(c.name) && !/\.mkv$/i.test(c.name)).sort((a, b) => a.mtime - b.mtime);
+  let total = listClips().reduce((n, c) => n + c.size, 0);
+  const cutoff = days ? Date.now() - days * 86400000 : 0;
+  let removed = 0;
+  for (const c of files) {
+    const tooOld = cutoff && c.mtime < cutoff;
+    if (!tooOld && !(limit && total > limit)) continue;
+    try {
+      fs.unlinkSync(c.path);
+      try { fs.unlinkSync(path.join(thumbDir(), c.name + '.jpg')); } catch {}
+      total -= c.size; removed++;
+    } catch {}
+  }
+  if (removed) { log('storage cleanup removed', removed); send('clips:changed'); }
+}
+setInterval(() => settings && cleanupStorage(), 60 * 60 * 1000);
+
 function inOutputDir(p) {
   const rel = path.relative(settings.outputDir, p);
   return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+// ---------- Discord ----------
+// Uploads a clip to the user's Discord webhook (squeezing it under the 10 MB limit if needed)
+// and copies the attachment link.
+async function shareToDiscord(p) {
+  const hook = (settings.discordWebhook || '').trim();
+  if (!/^https:\/\/(\w+\.)?discord(app)?\.com\/api\/webhooks\//.test(hook)) throw new Error('Add your Discord webhook link in Settings → Sharing first');
+  if (!inOutputDir(p)) throw new Error('Not a Replix clip');
+  const LIMIT = 10 * 1024 * 1024;
+  let file = p, temp = null;
+  if (fs.statSync(p).size > LIMIT * 0.97) {
+    if (/\.png$/i.test(p)) throw new Error('Screenshot is over 10 MB');
+    const dur = await new Promise((resolve) => require('child_process').execFile(ffmpegPath, ['-hide_banner', '-i', p], { windowsHide: true },
+      (_e, _o, err) => { const m = /Duration: (\d+):(\d+):([\d.]+)/.exec(err || ''); resolve(m ? m[1] * 3600 + m[2] * 60 + Number(m[3]) : 30); }));
+    temp = await recorder.exportClip(p, { start: 0, end: dur, targetMB: 9.3, tracks: await recorder.audioTrackCount(p) });
+    file = temp;
+  }
+  try {
+    const form = new FormData();
+    form.append('payload_json', JSON.stringify({ content: `🎬 ${path.basename(p).replace(/\.\w+$/, '').replace(/_/g, ' ')}` }));
+    form.append('files[0]', new Blob([fs.readFileSync(file)]), path.basename(file));
+    const res = await fetch(hook + (hook.includes('?') ? '&' : '?') + 'wait=true', { method: 'POST', body: form });
+    if (!res.ok) throw new Error(`Discord said ${res.status}: ${(await res.text()).slice(0, 120)}`);
+    const msg = await res.json();
+    const url = msg.attachments && msg.attachments[0] && msg.attachments[0].url;
+    if (url) clipboard.writeText(url);
+    toast('Shared to Discord', url ? 'Link copied to clipboard' : 'Posted', 'ok');
+    return { url };
+  } finally {
+    if (temp) { try { fs.unlinkSync(temp); } catch {} }
+  }
 }
 
 // ---------- IPC ----------
@@ -232,10 +422,11 @@ function setupIpc() {
     applyStartup();
     const captureKeys = ['bufferSeconds', 'fps', 'resolution', 'quality', 'encoder', 'codec', 'rateControl', 'bitrateMbps',
       'encoderPreset', 'captureCursor', 'monitor', 'systemAudio', 'mic', 'micDeviceId', 'systemVolume', 'micVolume',
-      'splitAudio', 'audioBitrate', 'micNoiseSuppression', 'micEchoCancellation'];
+      'splitAudio', 'audioBitrate', 'micNoiseSuppression', 'micEchoCancellation', 'captureTarget'];
     if (captureKeys.some((k) => prev[k] !== settings[k]) && recorder.wantRunning && !recorder.status.recording) {
       audioWin.webContents.send('audio:config', audioConfig());
-      await recorder.restart(settings, display());
+      await applyCrop(false);
+      await recorder.restart(captureSettings(), display());
     }
     pushStatus();
     return { settings, failedHotkeys: failed };
@@ -293,6 +484,17 @@ function setupIpc() {
   });
   ipcMain.handle('clips:reveal', (_e, p) => shell.showItemInFolder(p));
   ipcMain.handle('clips:openFolder', () => shell.openPath(settings.outputDir));
+  ipcMain.handle('meta:get', (_e, name) => loadMeta()[name] || {});
+  ipcMain.handle('clips:tracks', (_e, p) => (inOutputDir(p) ? recorder.audioTrackCount(p) : 0));
+  ipcMain.handle('clips:export', async (_e, p, opts) => {
+    if (!inOutputDir(p)) return null;
+    const out = await recorder.exportClip(p, { ...opts, tracks: await recorder.audioTrackCount(p) });
+    send('clips:changed');
+    return out;
+  });
+  ipcMain.handle('share:discord', async (_e, p) => shareToDiscord(p));
+  ipcMain.handle('capture:screenshot', takeScreenshot);
+  ipcMain.handle('games:current', () => ({ current: currentGame && currentGame.name, fg: lastFg && { exe: lastFg.exe, title: lastFg.title } }));
   ipcMain.handle('clips:trim', async (_e, p, start, end) => {
     if (!inOutputDir(p)) return null;
     const out = await recorder.trim(p, start, end);
@@ -363,6 +565,11 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(['media', 'display-capture'].includes(perm)));
 
   setupIpc();
+  watcher = new Watcher();
+  watcher.on('foreground', onForeground);
+  watcher.on('pad', onPad);
+  watcher.start();
+  cleanupStorage();
   setupUpdater();
   createMain();
   createAudio();

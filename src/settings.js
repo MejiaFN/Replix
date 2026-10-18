@@ -10,6 +10,21 @@ const DEFAULTS = {
   recordHotkey: 'F9',
   bufferHotkey: '',
   micMuteHotkey: '',
+  screenshotHotkey: 'F7',
+  bookmarkHotkey: 'F6',
+  padClip: '', // controller combo, e.g. 'back+a'
+  padRecord: '',
+  // games
+  gameDetection: true,
+  gameOnlyBuffer: false, // run the replay buffer only while a game is open
+  captureTarget: 'display', // 'display' | 'window' (crop to the game window)
+  customGames: [], // [{ name, exe }]
+  // storage
+  storageLimitGB: 0, // 0 = no limit
+  deleteAfterDays: 0, // 0 = keep forever
+  protectAlbums: true,
+  // sharing
+  discordWebhook: '',
   // replay buffer
   bufferSeconds: 60,
   // video
