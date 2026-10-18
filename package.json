@@ -1,0 +1,77 @@
+{
+  "name": "replix",
+  "version": "1.1.0",
+  "description": "Replix - replay buffer clipping & screen recording for Windows",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "release": "electron-builder --win --publish always"
+  },
+  "author": "Replix",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "ffmpeg-static": "^5.3.0"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "ffmpeg-static@5.3.0": true
+  },
+  "productName": "Replix",
+  "private": true,
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "app.replix.clipper",
+    "productName": "Replix",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "src/ui/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Replix",
+      "artifactName": "Replix-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "Replix-Portable-${version}.exe"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "MejiaFN",
+        "repo": "Replix",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
